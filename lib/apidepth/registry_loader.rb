@@ -29,13 +29,14 @@ module Apidepth
         end
       end.tap do |t|
         t.abort_on_exception = false
-        t.name = "apidepth-registry" if t.respond_to?(:name=)
+        t.name = "apidepth-registry"
       end
     end
 
     def self.fetch_remote
       Thread.current[:apidepth_skip] = true
 
+      http = nil
       uri  = URI(REGISTRY_URL)
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl      = true
@@ -71,6 +72,7 @@ module Apidepth
     rescue StandardError
       nil
     ensure
+      http&.finish rescue nil
       Thread.current[:apidepth_skip] = false
     end
 

@@ -37,9 +37,8 @@ Gem::Specification.new do |spec|
   # -------------------------------------------------------------------------
 
   # json stdlib is bundled with Ruby but can be installed as a standalone gem.
-  # CVE-2026-33210: format string injection in json < 2.x.y (check RubyGems
-  # advisory database for the exact patched version before release).
-  # Pin to a version known to be safe at time of publishing.
+  # Pin to >= 2.7.2 — check the RubyGems advisory database before each release
+  # to confirm this lower bound is still free of known CVEs.
   spec.add_dependency "json", ">= 2.7.2"
 
   # -------------------------------------------------------------------------

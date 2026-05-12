@@ -66,6 +66,18 @@ module Apidepth
         @last_flush_at        = Time.now
       end
     rescue StandardError => e
+      failures = @stats_mutex.synchronize { @consecutive_failures += 1 }
+
+      begin
+        Apidepth.configuration.on_flush_error&.call(e, {
+          dropped_events:       events&.size || 0,
+          consecutive_failures: failures,
+          total_dropped:        @total_dropped
+        })
+      rescue StandardError
+        nil
+      end
+
       Apidepth.logger&.warn("[Apidepth] Final flush failed: #{e.class}: #{e.message}")
     end
 
@@ -90,7 +102,7 @@ module Apidepth
         end
       end
       @flush_thread.abort_on_exception = false
-      @flush_thread.name = "apidepth-flush" if @flush_thread.respond_to?(:name=)
+      @flush_thread.name = "apidepth-flush"
     end
 
     def start_watchdog_thread
@@ -107,7 +119,7 @@ module Apidepth
         end
       end
       @watchdog_thread.abort_on_exception = false
-      @watchdog_thread.name = "apidepth-watchdog" if @watchdog_thread.respond_to?(:name=)
+      @watchdog_thread.name = "apidepth-watchdog"
     end
 
     # Kill background threads and close the HTTP connection.
@@ -167,6 +179,8 @@ module Apidepth
       events
     end
 
+    # Memoized on first flush. Intentional: collector_url is a boot-time setting.
+    # Changing configuration.collector_url after the first flush has no effect.
     def collector_url
       @cached_url ||= begin
         url = URI.parse(Apidepth.configuration.collector_url || DEFAULT_URL)
@@ -203,7 +217,12 @@ module Apidepth
     def send_batch(events)
       return if events.empty?
 
-      validate_api_key!(Apidepth.configuration.api_key)
+      key = Apidepth.configuration.api_key
+      # Nil or empty key: Railtie already warned at boot — skip silently rather
+      # than sending a broken "Bearer " header and burning a failure increment.
+      return if key.nil? || key.empty?
+
+      validate_api_key!(key)
 
       payload = {
         batch: events,
@@ -218,7 +237,7 @@ module Apidepth
 
         req                  = Net::HTTP::Post.new(url.path.empty? ? "/" : url.path)
         req["Content-Type"]  = "application/json"
-        req["Authorization"] = "Bearer #{Apidepth.configuration.api_key}"
+        req["Authorization"] = "Bearer #{key}"
         req.body             = JSON.generate(payload)
 
         response = http.request(req)

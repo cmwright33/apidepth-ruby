@@ -144,11 +144,11 @@ RSpec.describe Apidepth::NetHTTPInstrumentation do
       Apidepth.configuration.environment = nil
     end
 
-    it "falls back to Rails.env when environment is not configured" do
+    it "falls back to 'unknown' when environment is not configured" do
       Apidepth.configuration.environment = nil
       Net::HTTP.get(URI("https://api.stripe.com/v1/charges/ch_abc123"))
       expect(collector).to have_received(:record).with(
-        hash_including(env: Rails.env.to_s)
+        hash_including(env: "unknown")
       )
     end
   end
@@ -575,6 +575,10 @@ RSpec.describe "Apidepth::Collector security" do
     it "allows nil api_key without raising (nil guard is elsewhere)" do
       expect { collector.send(:validate_api_key!, nil) }.not_to raise_error
     end
+
+    it "allows empty api_key without raising (empty guard is elsewhere)" do
+      expect { collector.send(:validate_api_key!, "") }.not_to raise_error
+    end
   end
 end
 
@@ -617,7 +621,7 @@ end
 RSpec.describe Apidepth::Collector do
   def event(overrides = {})
     { vendor: "stripe", endpoint: "/v1/charges/:id", method: "GET",
-      status: 200, duration_ms: 80, ts: Time.now.to_i }.merge(overrides)
+      outcome: :success, status: 200, duration_ms: 80, ts: Time.now.to_i }.merge(overrides)
   end
 
   describe ".instance (singleton)" do
@@ -830,6 +834,19 @@ RSpec.describe Apidepth::Collector do
       expect(collector.consecutive_failures).to eq(1)
     ensure
       Apidepth.configuration.collector_url = nil
+    end
+  end
+
+  describe "end-to-end empty api_key guard" do
+    it "safe_flush does not send and does not increment failures when api_key is empty" do
+      Apidepth.configuration.api_key = ""
+      collector = described_class.new
+      collector.record(event)
+      collector.send(:safe_flush)
+
+      expect(collector.consecutive_failures).to eq(0)
+    ensure
+      Apidepth.configuration.api_key = nil
     end
   end
 

@@ -121,9 +121,10 @@ module Apidepth
             patterns[slug] = (config["patterns"] || []).filter_map do |rule|
               match = rule["match"].to_s
 
-              # Block embedded code and possessive quantifier constructs that
-              # can be used for ReDoS or arbitrary code execution in some
-              # Ruby/Oniguruma versions. Legitimate path patterns never need these.
+              # Block constructs that enable arbitrary code execution in some
+              # Ruby/Oniguruma versions. This is a blocklist — it does not prevent
+              # catastrophic-backtracking ReDoS (e.g. (a+)+) from a compromised
+              # registry, but legitimate path patterns never need these constructs.
               if match.match?(/\(\?[{<!=]|\(\?#|\+\?|\*\?{2}/)
                 Apidepth.logger&.warn("[Apidepth] Skipping unsafe pattern for #{Apidepth.sanitize_log(slug)}: #{match.inspect}")
                 next
