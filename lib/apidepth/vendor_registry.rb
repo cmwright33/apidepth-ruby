@@ -102,9 +102,13 @@ module Apidepth
 
       private
 
+      # Called at require time — Apidepth.logger is not yet defined so we
+      # can't call replace (which logs). Initialize state directly instead.
       def initialize_registry
-        @mutex = Mutex.new
-        replace(BUNDLED_BASELINE)
+        @mutex    = Mutex.new
+        @version  = BUNDLED_BASELINE["version"]
+        @hosts    = build_hosts(BUNDLED_BASELINE)
+        @patterns = build_patterns(BUNDLED_BASELINE)
       end
 
       def build_hosts(registry)

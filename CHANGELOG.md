@@ -9,6 +9,42 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **Load-order bug** — `VendorRegistry.initialize_registry` called `Apidepth.logger` at
+  require time before the logger was defined, causing `NoMethodError` on Ruby 4.0.
+  The bundled baseline now loads silently without touching the logger.
+
+- **Empty `api_key` now skips the flush** instead of sending a broken `Authorization: Bearer `
+  header and burning a consecutive-failure increment. The Railtie already warns at boot for
+  nil keys; empty strings are now treated the same way.
+
+- **`flush!` (at-exit path) now calls `on_flush_error`** and increments `consecutive_failures`
+  on failure, consistent with `safe_flush`. Previously, at-exit flush failures were silently
+  swallowed beyond a log warning.
+
+- **`RegistryLoader.fetch_remote` now closes its HTTP connection** in an `ensure` block.
+  Previously the connection was left open for GC to eventually close.
+
+- **`collector_url` memoization is now documented** — changing `configuration.collector_url`
+  after the first flush has no effect; this is intentional but was previously undocumented.
+
+### Changed
+
+- `json` dependency floor raised from `>= 2.7.2` to `>= 2.19.2` to exclude versions
+  affected by **CVE-2026-33210** (CVSS 9.1 — format string injection when
+  `allow_duplicate_key: false` is used to parse user-supplied input).
+
+### Removed
+
+- `lib/apidepth/core.rb` tombstone file deleted. It contained only a comment directing
+  users to the correct require paths and served no functional purpose.
+
+### Security
+
+- Removed dead `respond_to?(:name=)` guards on thread naming — `Thread#name=` is available
+  since Ruby 2.3 and the gem requires 2.7+.
+
 ---
 
 ## [0.1.0] — 2026-05-11

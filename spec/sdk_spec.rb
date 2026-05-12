@@ -28,9 +28,10 @@ RSpec.describe Apidepth::NetHTTPInstrumentation do
       )
     end
 
-    it "records a positive duration_ms" do
+    it "records a non-negative duration_ms" do
       Net::HTTP.get(URI("https://api.stripe.com/v1/charges/ch_abc123"))
-      expect(collector).to have_received(:record).with(hash_including(duration_ms: be_positive))
+      # WebMock returns instantly; elapsed rounds to 0ms on fast hardware.
+      expect(collector).to have_received(:record).with(hash_including(duration_ms: (be >= 0)))
     end
 
     it "records a unix timestamp" do
@@ -111,12 +112,14 @@ RSpec.describe Apidepth::NetHTTPInstrumentation do
       }.to raise_error(Net::ReadTimeout)
     end
 
-    it "records a positive duration_ms for timeouts" do
+    it "records a non-negative duration_ms for timeouts" do
       stub_request(:get, "https://api.stripe.com/v1/charges/ch_abc123")
         .to_raise(Net::ReadTimeout)
       Net::HTTP.get(URI("https://api.stripe.com/v1/charges/ch_abc123")) rescue nil
+      # WebMock raises immediately with no delay, so elapsed rounds to 0ms on
+      # fast hardware. Accept >= 0 rather than > 0.
       expect(collector).to have_received(:record).with(
-        hash_including(duration_ms: be_positive)
+        hash_including(duration_ms: (be >= 0))
       )
     end
   end
@@ -129,7 +132,10 @@ RSpec.describe Apidepth::NetHTTPInstrumentation do
     end
 
     it "records cold_start: false when a keep-alive connection is already open" do
-      allow_any_instance_of(Net::HTTP).to receive(:started?).and_return(true)
+      # Net::HTTP.start establishes the connection before yielding to our
+      # instrumented request method, so started? is naturally true — no stub needed.
+      # Stubbing started? to true before start() runs causes a Ruby 4.0 SSL
+      # consistency check to raise IOError.
       Net::HTTP.get(URI("https://api.stripe.com/v1/charges/ch_abc123"))
       expect(collector).to have_received(:record).with(hash_including(cold_start: false))
     end
@@ -619,6 +625,10 @@ end
 # =============================================================================
 
 RSpec.describe Apidepth::Collector do
+  # Most tests need an api_key so send_batch proceeds past the nil/empty guard.
+  # Tests that exercise nil/empty/invalid keys set their own and override this.
+  before { Apidepth.configuration.api_key = "sk_test" }
+
   def event(overrides = {})
     { vendor: "stripe", endpoint: "/v1/charges/:id", method: "GET",
       outcome: :success, status: 200, duration_ms: 80, ts: Time.now.to_i }.merge(overrides)
@@ -814,13 +824,13 @@ RSpec.describe Apidepth::Collector do
   end
 
   describe "end-to-end SSRF rejection" do
-    it "flush! does not raise but increments failures when collector_url is HTTP" do
+    it "flush! does not raise but records the failure when collector_url is HTTP" do
       Apidepth.configuration.collector_url = "http://collector.apidepth.io/v1/events"
       collector = described_class.new
       collector.record(event)
 
       expect { collector.flush! }.not_to raise_error
-      expect(collector.consecutive_failures).to eq(0)  # flush! rescues internally
+      expect(collector.consecutive_failures).to eq(1)  # flush! rescues internally but still tracks it
     ensure
       Apidepth.configuration.collector_url = nil
     end
@@ -1353,10 +1363,10 @@ RSpec.describe "Integration: full instrumentation stack", :integration do
     expect(event["method"]).to eq("GET")
     expect(event["outcome"]).to eq("success")
     expect(event["status"]).to eq(200)
-    expect(event["duration_ms"]).to be_a(Integer).and be_positive
+    expect(event["duration_ms"]).to be_a(Integer).and be >= 0
     expect(event["ts"]).to be > Time.now.to_i * 100   # milliseconds, not seconds
     expect(event["env"]).to eq("test")
-    expect(event["cold_start"]).to be_in([true, false])
+    expect([true, false]).to include(event["cold_start"])
 
     expect(body["sdk"]["name"]).to eq("apidepth-ruby")
   end

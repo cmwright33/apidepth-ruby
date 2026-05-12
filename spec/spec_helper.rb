@@ -32,6 +32,14 @@ RSpec.configure do |config|
   # Reset all SDK state between tests so nothing bleeds across examples.
   # Tests that modify VendorRegistry use their own ensure blocks.
   config.after(:each) do
+    # Prevent rspec doubles set on @http from outliving their example.
+    # Tests that put a mock_http on the singleton must clear it themselves,
+    # but this nil-out is a safety net so teardown never calls finish on
+    # an expired double.
+    if (inst = Apidepth::Collector.instance_variable_get(:@instance))
+      inst.instance_variable_set(:@http, nil)
+    end
+
     # Kill old Collector threads and close the HTTP connection before clearing
     # the singleton — this is the correct teardown order.
     Apidepth::Collector.reset!
