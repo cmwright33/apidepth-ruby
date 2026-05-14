@@ -1322,6 +1322,196 @@ RSpec.describe "Apidepth::Collector last_flush_at semantics" do
 end
 
 # =============================================================================
+# Configuration: extra_vendors
+# =============================================================================
+
+RSpec.describe Apidepth::Configuration do
+  after { Apidepth.configuration.extra_vendors = {} }
+
+  it "defaults extra_vendors to an empty hash" do
+    expect(Apidepth::Configuration.new.extra_vendors).to eq({})
+  end
+
+  it "accepts a hash of vendor_name => host" do
+    Apidepth.configuration.extra_vendors = { "my-api" => "api.myservice.com" }
+    expect(Apidepth.configuration.extra_vendors).to eq({ "my-api" => "api.myservice.com" })
+  end
+end
+
+# =============================================================================
+# VendorRegistry: extra_vendors
+# =============================================================================
+
+RSpec.describe Apidepth::VendorRegistry do
+  # Snapshot state before each example, restore after so extra_vendors additions
+  # don't bleed across tests.
+  before do
+    Apidepth.configuration.extra_vendors = {}
+  end
+
+  after do
+    Apidepth.configuration.extra_vendors = {}
+    # Reset registry back to bundled baseline
+    Apidepth::VendorRegistry.replace(Apidepth::VendorRegistry::BUNDLED_BASELINE)
+  end
+
+  describe ".load_extra_vendors" do
+    it "maps a custom host to the given vendor name" do
+      Apidepth::VendorRegistry.load_extra_vendors("my-api" => "api.myservice.com")
+      vendor, = Apidepth::VendorRegistry.identify("api.myservice.com", "/v1/items")
+      expect(vendor).to eq("my-api")
+    end
+
+    it "is a no-op for nil input" do
+      expect { Apidepth::VendorRegistry.load_extra_vendors(nil) }.not_to raise_error
+    end
+
+    it "is a no-op for an empty hash" do
+      expect { Apidepth::VendorRegistry.load_extra_vendors({}) }.not_to raise_error
+    end
+
+    it "does not affect existing known vendors" do
+      Apidepth::VendorRegistry.load_extra_vendors("my-api" => "api.myservice.com")
+      vendor, = Apidepth::VendorRegistry.identify("api.stripe.com", "/v1/charges/ch_abc")
+      expect(vendor).to eq("stripe")
+    end
+
+    it "is thread-safe under concurrent writers" do
+      threads = 10.times.map do |i|
+        Thread.new do
+          Apidepth::VendorRegistry.load_extra_vendors("vendor-#{i}" => "host#{i}.example.com")
+        end
+      end
+      expect { threads.each(&:join) }.not_to raise_error
+    end
+  end
+
+  describe ".replace" do
+    it "preserves extra_vendors after a registry refresh" do
+      Apidepth.configuration.extra_vendors = { "my-api" => "api.myservice.com" }
+
+      # Simulate a registry refresh with a new document that doesn't include my-api
+      new_registry = {
+        "version" => "v2",
+        "vendors" => {
+          "stripe" => { "hosts" => ["api.stripe.com"], "patterns" => [] }
+        }
+      }
+      Apidepth::VendorRegistry.replace(new_registry)
+
+      vendor, = Apidepth::VendorRegistry.identify("api.myservice.com", "/v1/items")
+      expect(vendor).to eq("my-api")
+    end
+
+    it "re-applies multiple extra_vendors after a registry refresh" do
+      Apidepth.configuration.extra_vendors = {
+        "service-a" => "api.service-a.com",
+        "service-b" => "api.service-b.io",
+      }
+
+      Apidepth::VendorRegistry.replace(Apidepth::VendorRegistry::BUNDLED_BASELINE)
+
+      vendor_a, = Apidepth::VendorRegistry.identify("api.service-a.com", "/v1/foo")
+      vendor_b, = Apidepth::VendorRegistry.identify("api.service-b.io", "/v2/bar")
+      expect(vendor_a).to eq("service-a")
+      expect(vendor_b).to eq("service-b")
+    end
+
+    it "uses generic path normalization for extra vendors (no vendor-specific patterns)" do
+      Apidepth.configuration.extra_vendors = { "my-api" => "api.myservice.com" }
+      Apidepth::VendorRegistry.replace(Apidepth::VendorRegistry::BUNDLED_BASELINE)
+
+      _, path = Apidepth::VendorRegistry.identify("api.myservice.com", "/v1/resources/12345678")
+      expect(path).to eq("/v1/resources/:id")
+    end
+
+    it "updates the version" do
+      new_registry = { "version" => "v99", "vendors" => {} }
+      Apidepth::VendorRegistry.replace(new_registry)
+      expect(Apidepth::VendorRegistry.version).to eq("v99")
+    end
+  end
+end
+
+# =============================================================================
+# Collector: extra_vendors in batch payload
+# =============================================================================
+
+RSpec.describe "Collector#send_batch extra_vendors" do
+  let(:response)  { double("response", code: "200", body: "{}") }
+  let(:mock_http) { double("Net::HTTP", started?: true) }
+
+  before do
+    Apidepth.configuration.api_key = "sk_test"
+    allow(mock_http).to receive(:request).and_return(response)
+  end
+
+  after do
+    Apidepth.configuration.api_key    = nil
+    Apidepth.configuration.extra_vendors = {}
+  end
+
+  def make_event
+    Apidepth::Event.build(
+      vendor: "stripe", endpoint: "/v1/charges/:id", method: "GET",
+      outcome: :success, duration_ms: 50, ts: (Time.now.to_f * 1000).to_i,
+      status: 200, cold_start: false, env: "test"
+    )
+  end
+
+  it "includes extra_vendors in the payload when configured" do
+    Apidepth.configuration.extra_vendors = { "my-api" => "api.myservice.com" }
+    collector = Apidepth::Collector.new
+    collector.instance_variable_set(:@http, mock_http)
+
+    collector.send(:send_batch, [make_event])
+
+    captured = JSON.parse(mock_http.instance_variable_get(:@request_body) ||
+                           mock_http.instance_variable_get(:@last_req_body) ||
+                           "{}") rescue nil
+
+    # Capture via request spy
+    captured_body = nil
+    allow(mock_http).to receive(:request) { |req| captured_body = req.body; response }
+    collector.instance_variable_set(:@http, mock_http)
+    collector.send(:send_batch, [make_event])
+
+    body = JSON.parse(captured_body)
+    expect(body["extra_vendors"]).to eq({ "my-api" => "api.myservice.com" })
+  end
+
+  it "omits extra_vendors key from payload when config is empty" do
+    Apidepth.configuration.extra_vendors = {}
+    captured_body = nil
+    allow(mock_http).to receive(:request) { |req| captured_body = req.body; response }
+
+    collector = Apidepth::Collector.new
+    collector.instance_variable_set(:@http, mock_http)
+    collector.send(:send_batch, [make_event])
+
+    body = JSON.parse(captured_body)
+    expect(body).not_to have_key("extra_vendors")
+  end
+
+  it "omits extra_vendors key from payload when config is nil" do
+    Apidepth.configuration.extra_vendors = nil
+    captured_body = nil
+    allow(mock_http).to receive(:request) { |req| captured_body = req.body; response }
+
+    collector = Apidepth::Collector.new
+    collector.instance_variable_set(:@http, mock_http)
+
+    # Should not raise NoMethodError on nil
+    expect { collector.send(:send_batch, [make_event]) }.not_to raise_error
+
+    body = JSON.parse(captured_body)
+    expect(body).not_to have_key("extra_vendors")
+  ensure
+    Apidepth.configuration.extra_vendors = {}
+  end
+end
+
+# =============================================================================
 # Integration: full stack
 # =============================================================================
 
