@@ -90,6 +90,12 @@ module Apidepth
         new_hosts    = build_hosts(registry_json)
         new_patterns = build_patterns(registry_json)
 
+        # Re-apply extra_vendors so a registry refresh never wipes customer-defined
+        # host mappings. The config value wins over any registry entry for the same host.
+        (Apidepth.configuration.extra_vendors || {}).each do |name, host|
+          new_hosts[host.to_s] = name.to_s
+        end
+
         @mutex.synchronize do
           @hosts    = new_hosts
           @patterns = new_patterns

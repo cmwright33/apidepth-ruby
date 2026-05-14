@@ -228,7 +228,7 @@ module Apidepth
       payload = {
         batch:         events,
         sdk:           Apidepth.sdk_metadata,
-        extra_vendors: extra.empty? ? nil : extra,
+        extra_vendors: (extra.nil? || extra.empty?) ? nil : extra,
       }.compact
 
       Thread.current[:apidepth_skip] = true
