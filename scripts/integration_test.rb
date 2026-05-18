@@ -15,6 +15,9 @@
 #   API_KEY=apd_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
 #   /usr/local/opt/ruby@3.2/bin/ruby scripts/integration_test.rb
 #
+# Note: COLLECTOR_URL is the base URL. The gem's collector_url config is set
+# to COLLECTOR_URL/v1/events (the full ingest endpoint) internally.
+#
 # Exit codes:
 #   0 — all checks passed
 #   1 — one or more checks failed
@@ -29,8 +32,11 @@ require "json"
 # manually. In a real Rails app this is handled automatically by the Railtie.
 Net::HTTP.prepend(Apidepth::NetHTTPInstrumentation)
 
+# Base URL for query API calls (vendors, endpoints, latency).
 COLLECTOR_URL = ENV.fetch("COLLECTOR_URL", "").chomp("/")
 API_KEY       = ENV.fetch("API_KEY", "")
+# The gem's collector_url config is the full ingest endpoint, not just the base.
+EVENTS_URL    = "#{COLLECTOR_URL}/v1/events"
 # Use a per-run env tag so results are isolated from previous runs
 ENV_TAG       = "integration-#{Process.pid}"
 
@@ -68,7 +74,7 @@ failures = 0
 puts "\n[ Configure ]"
 Apidepth.configure do |config|
   config.api_key       = API_KEY
-  config.collector_url = COLLECTOR_URL
+  config.collector_url = EVENTS_URL
   config.environment   = ENV_TAG
   config.enabled       = true
 end
