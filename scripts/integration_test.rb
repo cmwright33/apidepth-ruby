@@ -25,6 +25,10 @@ require "net/http"
 require "uri"
 require "json"
 
+# Outside Rails the Railtie never runs, so we must wire up the instrumentation
+# manually. In a real Rails app this is handled automatically by the Railtie.
+Net::HTTP.prepend(Apidepth::NetHTTPInstrumentation)
+
 COLLECTOR_URL = ENV.fetch("COLLECTOR_URL", "").chomp("/")
 API_KEY       = ENV.fetch("API_KEY", "")
 # Use a per-run env tag so results are isolated from previous runs
