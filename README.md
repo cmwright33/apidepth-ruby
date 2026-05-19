@@ -155,6 +155,31 @@ To request a vendor be added to the global registry: [open an issue](https://git
 
 ---
 
+## Rate limit header extraction (v0.2.0+)
+
+When a vendor response includes rate limit quota headers, the SDK automatically extracts them and attaches three fields to the event: `rl_remaining`, `rl_limit`, and `rl_reset_at`. The collector uses these to power the burn-down projection on the Rate Limits dashboard page.
+
+No configuration is needed. Header extraction is passive and adds no overhead when headers are absent — `RateLimitHeaders.extract` returns `nil` and the fields are omitted from the event.
+
+### Supported headers
+
+Headers are checked in priority order per field:
+
+| Field | Headers (checked in order) |
+|-------|---------------------------|
+| remaining | `x-ratelimit-remaining-requests`, `x-ratelimit-remaining`, `ratelimit-remaining` |
+| limit | `x-ratelimit-limit-requests`, `x-ratelimit-limit`, `ratelimit-limit` |
+| reset_at | `x-ratelimit-reset-requests`, `x-ratelimit-reset`, `ratelimit-reset`, `retry-after` |
+
+The `reset_at` value is normalised to epoch milliseconds regardless of vendor format:
+- **Unix timestamp** (`n ≥ 1 × 10⁹`) — GitHub, HubSpot, IETF draft
+- **Seconds from now** (small integer) — Stripe `Retry-After` on 429
+- **Duration string** (`"1s"`, `"20ms"`, `"1m30s"`) — OpenAI, Anthropic
+
+Vendors with no quota headers on 2xx responses (Twilio, Salesforce, Jira, Zendesk, Slack) still contribute to 429 frequency tracking — the collector counts `status = 429` events regardless of SDK version.
+
+---
+
 ## Puma cluster mode
 
 The Railtie handles `after_fork` automatically on Rails 7.1+ via `ActiveSupport::ForkTracker`. If you're on Rails 6.x or 7.0, add one line to `config/puma.rb` to ensure each worker gets a clean collector instance:
@@ -222,6 +247,16 @@ bundle exec rspec
 ```
 
 The test suite requires no external services — all HTTP is stubbed via WebMock.
+
+For end-to-end verification against a live collector, use the integration test script:
+
+```bash
+COLLECTOR_URL=https://your-collector.railway.app \
+API_KEY=apd_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
+ruby scripts/integration_test.rb
+```
+
+This exercises the full pipeline: `Net::HTTP` instrumentation → event capture → flush → collector ingest → query API verification. It requires a running collector and a valid API key. It is separate from the unit suite and does not run in CI.
 
 To add a vendor to the bundled registry, edit `BUNDLED_BASELINE` in `lib/apidepth/vendor_registry.rb` and add corresponding tests to `spec/apidepth/sdk_spec.rb`. Path normalization patterns should be ordered most-specific first.
 

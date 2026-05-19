@@ -6,7 +6,7 @@ require "uri"
 
 module Apidepth
   class RegistryLoader
-    REGISTRY_URL = "https://collector.apidepth.io/v1/registry"
+    REGISTRY_URL = "https://collector.apidepth.io/v1/registry".freeze
 
     # Called by the Railtie after_initialize. Loads the best available
     # registry (remote → disk cache → bundled baseline already loaded by
@@ -68,11 +68,14 @@ module Apidepth
       end
 
       registry
-
     rescue StandardError
       nil
     ensure
-      http&.finish rescue nil
+      begin
+        http&.finish
+      rescue StandardError
+        nil
+      end
       Thread.current[:apidepth_skip] = false
     end
 
@@ -103,9 +106,9 @@ module Apidepth
         raise ArgumentError, "registry_cache_path must be an absolute path (got #{path.inspect})"
       end
 
-      if path.split("/").include?("..")
-        raise ArgumentError, "registry_cache_path must not contain '..' traversal segments (got #{path.inspect})"
-      end
+      return unless path.split("/").include?("..")
+
+      raise ArgumentError, "registry_cache_path must not contain '..' traversal segments (got #{path.inspect})"
     end
 
     # Ruby's `private` keyword does not apply to `def self.method` — those remain

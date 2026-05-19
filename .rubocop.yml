@@ -1,0 +1,64 @@
+AllCops:
+  TargetRubyVersion: 2.7
+  NewCops: enable
+  Exclude:
+    - "vendor/**/*"
+    - "*.gemspec"
+
+# --- Style ---
+
+Style/FrozenStringLiteralComment:
+  Enabled: false
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/Documentation:
+  Enabled: false
+
+Style/ClassAndModuleChildren:
+  Enabled: false
+
+Style/ClassMethodsDefinitions:
+  Enabled: false
+
+# Module#private_class_method pattern (used in RateLimitHeaders)
+Style/AccessModifierDeclarations:
+  Enabled: false
+
+# .tap { |t| t.name = ... }.tap { ... } chains are idiomatic for thread setup
+Style/MultilineBlockChain:
+  Enabled: false
+
+# --- Layout ---
+
+Layout/LineLength:
+  Max: 120
+
+# --- Metrics ---
+
+Metrics/MethodLength:
+  Max: 35
+
+Metrics/BlockLength:
+  Enabled: false
+
+Metrics/ClassLength:
+  Enabled: false
+
+Metrics/ModuleLength:
+  Enabled: false
+
+Metrics/AbcSize:
+  Max: 50
+
+Metrics/CyclomaticComplexity:
+  Max: 10
+
+Metrics/PerceivedComplexity:
+  Max: 10
+
+# --- Lint ---
+
+Lint/MissingSuper:
+  Enabled: false

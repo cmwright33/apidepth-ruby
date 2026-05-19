@@ -1466,10 +1466,6 @@ RSpec.describe "Collector#send_batch extra_vendors" do
 
     collector.send(:send_batch, [make_event])
 
-    captured = JSON.parse(mock_http.instance_variable_get(:@request_body) ||
-                           mock_http.instance_variable_get(:@last_req_body) ||
-                           "{}") rescue nil
-
     # Capture via request spy
     captured_body = nil
     allow(mock_http).to receive(:request) { |req| captured_body = req.body; response }

@@ -26,8 +26,8 @@ module Apidepth
       missing = REQUIRED - attrs.keys
       unless missing.empty?
         raise ArgumentError,
-          "Apidepth event is missing required fields: #{missing.join(', ')}. " \
-          "This is a bug in the SDK — please open an issue."
+              "Apidepth event is missing required fields: #{missing.join(', ')}. " \
+              "This is a bug in the SDK — please open an issue."
       end
 
       attrs.freeze

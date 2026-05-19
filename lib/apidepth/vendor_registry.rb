@@ -6,62 +6,62 @@ module Apidepth
       "version" => "bundled",
       "vendors" => {
         "stripe" => {
-          "hosts"    => ["api.stripe.com"],
+          "hosts" => ["api.stripe.com"],
           "patterns" => [
-            { "match" => '/v1/charges/ch_\w+',            "replace" => "/v1/charges/:id" },
+            { "match" => '/v1/charges/ch_\w+', "replace" => "/v1/charges/:id" },
             { "match" => '/v1/customers/cus_\w+',          "replace" => "/v1/customers/:id" },
             { "match" => '/v1/payment_intents/pi_\w+',     "replace" => "/v1/payment_intents/:id" },
             { "match" => '/v1/subscriptions/sub_\w+',      "replace" => "/v1/subscriptions/:id" },
             { "match" => '/v1/invoices/in_\w+',            "replace" => "/v1/invoices/:id" },
-            { "match" => '/v1/refunds/re_\w+',             "replace" => "/v1/refunds/:id" },
+            { "match" => '/v1/refunds/re_\w+',             "replace" => "/v1/refunds/:id" }
           ]
         },
         "openai" => {
-          "hosts"    => ["api.openai.com"],
+          "hosts" => ["api.openai.com"],
           "patterns" => [
             { "match" => "/v1/chat/completions",           "replace" => "/v1/chat/completions" },
             { "match" => "/v1/embeddings",                 "replace" => "/v1/embeddings" },
             { "match" => "/v1/images/generations",         "replace" => "/v1/images/generations" },
-            { "match" => '/v1/files/file-\w+',             "replace" => "/v1/files/:id" },
+            { "match" => '/v1/files/file-\w+',             "replace" => "/v1/files/:id" }
           ]
         },
         "anthropic" => {
-          "hosts"    => ["api.anthropic.com"],
+          "hosts" => ["api.anthropic.com"],
           "patterns" => [
-            { "match" => "/v1/messages",                   "replace" => "/v1/messages" },
+            { "match" => "/v1/messages",                   "replace" => "/v1/messages" }
           ]
         },
         "twilio" => {
-          "hosts"    => ["api.twilio.com"],
+          "hosts" => ["api.twilio.com"],
           "patterns" => [
             { "match" => '/2010-04-01/Accounts/AC\w+/Messages/SM\w+', "replace" => "/Accounts/:id/Messages/:id" },
             { "match" => '/2010-04-01/Accounts/AC\w+/Messages',       "replace" => "/Accounts/:id/Messages" },
             { "match" => '/2010-04-01/Accounts/AC\w+/Calls/CA\w+',    "replace" => "/Accounts/:id/Calls/:id" },
-            { "match" => '/2010-04-01/Accounts/AC\w+/Calls',          "replace" => "/Accounts/:id/Calls" },
+            { "match" => '/2010-04-01/Accounts/AC\w+/Calls',          "replace" => "/Accounts/:id/Calls" }
           ]
         },
         "resend" => {
-          "hosts"    => ["api.resend.com"],
+          "hosts" => ["api.resend.com"],
           "patterns" => [
-            { "match" => '/emails/[0-9a-f-]{36}', "replace" => "/emails/:id" },
+            { "match" => "/emails/[0-9a-f-]{36}", "replace" => "/emails/:id" }
           ]
         },
         "github" => {
-          "hosts"    => ["api.github.com"],
+          "hosts" => ["api.github.com"],
           "patterns" => [
             { "match" => '/repos/[^/]+/[^/]+/pulls/\d+',  "replace" => "/repos/:owner/:repo/pulls/:number" },
             { "match" => '/repos/[^/]+/[^/]+/issues/\d+', "replace" => "/repos/:owner/:repo/issues/:number" },
-            { "match" => '/repos/[^/]+/[^/]+',            "replace" => "/repos/:owner/:repo" },
-            { "match" => '/users/[^/]+',                   "replace" => "/users/:username" },
+            { "match" => "/repos/[^/]+/[^/]+",            "replace" => "/repos/:owner/:repo" },
+            { "match" => "/users/[^/]+", "replace" => "/users/:username" }
           ]
-        },
+        }
       }
     }.freeze
 
     GENERIC_PATTERNS = [
-      [/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/, "/:uuid"],
-      [/\/\d{4,}/,        "/:id"],
-      [/\/[a-z0-9]{24,}/, "/:token"],
+      [%r{/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}, "/:uuid"],
+      [%r{/\d{4,}},        "/:id"],
+      [%r{/[a-z0-9]{24,}}, "/:token"]
     ].freeze
 
     class << self
@@ -81,6 +81,7 @@ module Apidepth
       # Does not touch @patterns — custom vendors use generic path normalization only.
       def load_extra_vendors(extra_vendors)
         return if extra_vendors.nil? || extra_vendors.empty?
+
         @mutex.synchronize do
           extra_vendors.each { |name, host| @hosts[host.to_s] = name.to_s }
         end
@@ -146,13 +147,18 @@ module Apidepth
               # catastrophic-backtracking ReDoS (e.g. (a+)+) from a compromised
               # registry, but legitimate path patterns never need these constructs.
               if match.match?(/\(\?[{<!=]|\(\?#|\+\?|\*\?{2}/)
-                Apidepth.logger&.warn("[Apidepth] Skipping unsafe pattern for #{Apidepth.sanitize_log(slug)}: #{match.inspect}")
+                Apidepth.logger&.warn(
+                  "[Apidepth] Skipping unsafe pattern for #{Apidepth.sanitize_log(slug)}: #{match.inspect}"
+                )
                 next
               end
 
               [Regexp.new(match), rule["replace"].to_s]
             rescue RegexpError => e
-              Apidepth.logger&.warn("[Apidepth] Skipping invalid pattern for #{Apidepth.sanitize_log(slug)} #{match.inspect}: #{e.message}")
+              Apidepth.logger&.warn(
+                "[Apidepth] Skipping invalid pattern for #{Apidepth.sanitize_log(slug)} " \
+                "#{match.inspect}: #{e.message}"
+              )
               nil
             end
           end
