@@ -27,7 +27,6 @@ module Apidepth
         duration_ms = elapsed_ms(start)
         record_event(req, response, duration_ms, cold_start: cold_start)
         response
-
       rescue Net::OpenTimeout, Net::ReadTimeout => e
         # Timeouts are the leading indicator of vendor degradation — they
         # appear before the vendor acknowledges an incident. We record them
@@ -77,15 +76,15 @@ module Apidepth
       Apidepth::Collector.instance.record(
         Apidepth::Event.build(
           {
-            vendor:      vendor,
-            endpoint:    normalized_path,
-            method:      req.method,
-            status:      status,
-            outcome:     outcome,
+            vendor: vendor,
+            endpoint: normalized_path,
+            method: req.method,
+            status: status,
+            outcome: outcome,
             duration_ms: duration_ms,
-            cold_start:  cold_start,
-            env:         resolve_env,
-            ts:          now_ms,
+            cold_start: cold_start,
+            env: resolve_env,
+            ts: now_ms
           }.merge(rl || {})
         )
       )
@@ -99,16 +98,16 @@ module Apidepth
 
       Apidepth::Collector.instance.record(
         Apidepth::Event.build(
-          vendor:      vendor,
-          endpoint:    normalized_path,
-          method:      req.method,
-          status:      nil,
-          outcome:     :timeout,
+          vendor: vendor,
+          endpoint: normalized_path,
+          method: req.method,
+          status: nil,
+          outcome: :timeout,
           error_class: error_class,
           duration_ms: duration_ms,
-          cold_start:  cold_start,
-          env:         resolve_env,
-          ts:          Process.clock_gettime(Process::CLOCK_REALTIME, :millisecond)
+          cold_start: cold_start,
+          env: resolve_env,
+          ts: Process.clock_gettime(Process::CLOCK_REALTIME, :millisecond)
         )
       )
     rescue StandardError

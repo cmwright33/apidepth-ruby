@@ -42,12 +42,12 @@ module Apidepth
     # and app servers without needing the customer to file a support ticket.
     def sdk_metadata
       @sdk_metadata ||= {
-        name:          "apidepth-ruby",
-        version:       VERSION,
-        ruby_version:  RUBY_VERSION,
+        name: "apidepth-ruby",
+        version: VERSION,
+        ruby_version: RUBY_VERSION,
         ruby_platform: RUBY_PLATFORM,
         rails_version: (defined?(Rails) ? Rails.version : nil),
-        app_server:    detect_app_server
+        app_server: detect_app_server
       }.compact.freeze
     end
 
@@ -55,6 +55,7 @@ module Apidepth
       return "puma"      if defined?(Puma)
       return "unicorn"   if defined?(Unicorn)
       return "passenger" if defined?(PhusionPassenger)
+
       "unknown"
     end
 

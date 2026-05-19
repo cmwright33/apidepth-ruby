@@ -50,6 +50,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "webmock",     "~> 3.23"
   spec.add_development_dependency "railties",    ">= 6.1"
   spec.add_development_dependency "rack",        ">= 2.2.12"   # CVE-2025-27111 fix
+  spec.add_development_dependency "rubocop",     "~> 1.65"
 
   # -------------------------------------------------------------------------
   # Gem signing

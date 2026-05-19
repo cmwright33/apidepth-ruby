@@ -11,7 +11,7 @@ module Apidepth
     FAILURE_THRESHOLD = 3
     WATCHDOG_INTERVAL = 60
 
-    DEFAULT_URL = "https://collector.apidepth.io/v1/events"
+    DEFAULT_URL = "https://collector.apidepth.io/v1/events".freeze
 
     @instance_mutex = Mutex.new
 
@@ -70,10 +70,10 @@ module Apidepth
 
       begin
         Apidepth.configuration.on_flush_error&.call(e, {
-          dropped_events:       events&.size || 0,
-          consecutive_failures: failures,
-          total_dropped:        @total_dropped
-        })
+                                                      dropped_events: events&.size || 0,
+                                                      consecutive_failures: failures,
+                                                      total_dropped: @total_dropped
+                                                    })
       rescue StandardError
         nil
       end
@@ -84,13 +84,26 @@ module Apidepth
     def stats
       @stats_mutex.synchronize do
         {
-          queue_size:           @queue.size,
+          queue_size: @queue.size,
           consecutive_failures: @consecutive_failures,
-          total_dropped:        @total_dropped,
-          last_flush_at:        @last_flush_at
+          total_dropped: @total_dropped,
+          last_flush_at: @last_flush_at
         }
       end
     end
+
+    PRIVATE_HOST_PATTERN = /
+      \Alocalhost\z          |
+      \A127\.                |
+      \A0\.0\.0\.0\z         |
+      \A169\.254\.           |
+      \A10\.                 |
+      \A172\.(1[6-9]|2\d|3[01])\. |
+      \A192\.168\.           |
+      \A\[?::1\]?\z          |
+      \A\[?fc                |
+      \A\[?fe80:
+    /xi.freeze
 
     private
 
@@ -128,7 +141,9 @@ module Apidepth
     # resources as soon as they die. No join needed to unblock reset!.
     def teardown
       [@flush_thread, @watchdog_thread].compact.each do |t|
-        t.kill rescue nil
+        t.kill
+      rescue StandardError
+        nil
       end
       close_http_connection
     end
@@ -146,16 +161,15 @@ module Apidepth
         @consecutive_failures = 0
         @last_flush_at        = Time.now
       end
-
     rescue StandardError => e
       failures = @stats_mutex.synchronize { @consecutive_failures += 1 }
 
       begin
         Apidepth.configuration.on_flush_error&.call(e, {
-          dropped_events:       events&.size || 0,
-          consecutive_failures: failures,
-          total_dropped:        @total_dropped
-        })
+                                                      dropped_events: events&.size || 0,
+                                                      consecutive_failures: failures,
+                                                      total_dropped: @total_dropped
+                                                    })
       rescue StandardError
         nil
       end
@@ -171,9 +185,7 @@ module Apidepth
 
     def drain_queue
       events = []
-      while events.size < MAX_BATCH_SIZE
-        events << @queue.pop(true)
-      end
+      events << @queue.pop(true) while events.size < MAX_BATCH_SIZE
       events
     rescue ThreadError
       events
@@ -182,7 +194,7 @@ module Apidepth
     # Memoized on first flush. Intentional: collector_url is a boot-time setting.
     # Changing configuration.collector_url after the first flush has no effect.
     def collector_url
-      @cached_url ||= begin
+      @collector_url ||= begin
         url = URI.parse(Apidepth.configuration.collector_url || DEFAULT_URL)
         validate_collector_url!(url)
         url
@@ -210,7 +222,11 @@ module Apidepth
     end
 
     def close_http_connection
-      @http&.finish rescue nil
+      begin
+        @http&.finish
+      rescue StandardError
+        nil
+      end
       @http = nil
     end
 
@@ -226,9 +242,9 @@ module Apidepth
 
       extra = Apidepth.configuration.extra_vendors
       payload = {
-        batch:         events,
-        sdk:           Apidepth.sdk_metadata,
-        extra_vendors: (extra.nil? || extra.empty?) ? nil : extra,
+        batch: events,
+        sdk: Apidepth.sdk_metadata,
+        extra_vendors: extra.nil? || extra.empty? ? nil : extra
       }.compact
 
       Thread.current[:apidepth_skip] = true
@@ -245,58 +261,45 @@ module Apidepth
         response = http.request(req)
 
         unless (200..299).cover?(response.code.to_i)
-          close_http_connection  # server closed the connection or rejected us
+          close_http_connection # server closed the connection or rejected us
           raise "Collector returned HTTP #{response.code} — verify your api_key and collector_url"
         end
       end
-
     ensure
       Thread.current[:apidepth_skip] = false
     end
 
-    PRIVATE_HOST_PATTERN = /
-      \Alocalhost\z          |
-      \A127\.                |
-      \A0\.0\.0\.0\z         |
-      \A169\.254\.           |
-      \A10\.                 |
-      \A172\.(1[6-9]|2\d|3[01])\. |
-      \A192\.168\.           |
-      \A\[?::1\]?\z          |
-      \A\[?fc                |
-      \A\[?fe80:
-    /xi.freeze
-
     def validate_collector_url!(url)
       unless url.scheme == "https"
         raise ArgumentError,
-          "Apidepth collector_url must use HTTPS (got #{url.scheme.inspect}). " \
-          "HTTP connections are rejected to prevent SSRF and credential exposure."
+              "Apidepth collector_url must use HTTPS (got #{url.scheme.inspect}). " \
+              "HTTP connections are rejected to prevent SSRF and credential exposure."
       end
 
       host = url.host.to_s.downcase
 
       if host.match?(/\A\d+\z/)
         int = host.to_i
-        if int > 0 && int <= 0xFFFFFFFF
-          host = [int >> 24, (int >> 16) & 0xFF, (int >> 8) & 0xFF, int & 0xFF].join(".")
+        if int.positive? && int <= 0xFFFFFFFF
+          host = [int >> 24, (int >> 16) & 0xFF, (int >> 8) & 0xFF,
+                  int & 0xFF].join(".")
         end
       end
 
-      if host.empty? || PRIVATE_HOST_PATTERN.match?(host)
-        raise ArgumentError,
-          "Apidepth collector_url must not target private, loopback, or link-local " \
-          "addresses (got #{url.host.inspect})."
-      end
+      return unless host.empty? || PRIVATE_HOST_PATTERN.match?(host)
+
+      raise ArgumentError,
+            "Apidepth collector_url must not target private, loopback, or link-local " \
+            "addresses (got #{url.host.inspect})."
     end
 
     def validate_api_key!(key)
       return if key.nil? || key.empty?
-      if key.match?(/[\r\n]/)
-        raise ArgumentError,
-          "Apidepth api_key contains illegal line-break characters. " \
-          "This may indicate header injection — check your APIDEPTH_API_KEY value."
-      end
+      return unless key.match?(/[\r\n]/)
+
+      raise ArgumentError,
+            "Apidepth api_key contains illegal line-break characters. " \
+            "This may indicate header injection — check your APIDEPTH_API_KEY value."
     end
   end
 end

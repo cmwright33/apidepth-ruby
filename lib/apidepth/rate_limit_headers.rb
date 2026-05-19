@@ -72,6 +72,7 @@ module Apidepth
       headers.each do |name|
         val = response[name]
         next unless val
+
         n = val.strip.to_i
         return n if n >= 0
       end
@@ -83,6 +84,7 @@ module Apidepth
       headers.each do |name|
         val = response[name]
         next unless val
+
         ms = normalize_reset_ms(val.strip, now_ms)
         return ms if ms
       end
@@ -124,7 +126,7 @@ module Apidepth
                  else 0
                  end
       end
-      found && total > 0 ? total : nil
+      found && total.positive? ? total : nil
     end
     private_class_method :parse_duration_ms
   end
