@@ -6,7 +6,7 @@
 
 Apidepth.configure do |config|
   # Required. Your account API key from https://apidepth.io/dashboard/api-keys
-  config.api_key = ENV["APIDEPTH_API_KEY"]
+  config.api_key = ENV.fetch("APIDEPTH_API_KEY", nil)
 
   # Disable in test and CI environments (default: true).
   config.enabled = !Rails.env.test?

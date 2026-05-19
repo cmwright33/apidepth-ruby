@@ -1,5 +1,6 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
+
 #
 # End-to-end integration test for the apidepth Ruby gem.
 #
@@ -43,11 +44,11 @@ ENV_TAG       = "integration-#{Process.pid}"
 PASS = "\033[32m✓\033[0m"
 FAIL = "\033[31m✗\033[0m"
 
-def check(label, ok, detail = nil)
-  icon = ok ? PASS : FAIL
+def check(label, passed, detail = nil)
+  icon = passed ? PASS : FAIL
   suffix = detail ? "  (#{detail})" : ""
   puts "  #{icon}  #{label}#{suffix}"
-  ok
+  passed
 end
 
 def collector_get(path, params = {})
@@ -79,7 +80,7 @@ Apidepth.configure do |config|
   config.enabled       = true
 end
 failures += 1 unless check("Gem configured with collector URL and API key",
-                            Apidepth.configuration.api_key == API_KEY)
+                           Apidepth.configuration.api_key == API_KEY)
 
 # ── Instrumented outbound call ─────────────────────────────────────────────────
 # Stripe returns 401 for an unauthenticated request — we just need a real
@@ -129,7 +130,11 @@ begin
   failures += 1 unless check(
     "endpoint recorded in GET /v1/endpoints?vendor=stripe&env=#{gem_env}",
     ok && !endpoints.empty?,
-    !ok ? "status #{r.code}" : (endpoints.empty? ? "endpoints list is empty" : nil)
+    if ok
+      endpoints.empty? ? "endpoints list is empty" : nil
+    else
+      "status #{r.code}"
+    end
   )
 rescue StandardError => e
   failures += 1
@@ -142,18 +147,18 @@ puts "\n[ SDK stats ]"
 stats = Apidepth::Collector.instance.stats
 failures += 1 unless check(
   "queue drained after flush (queue_size == 0)",
-  stats[:queue_size] == 0,
+  stats[:queue_size].zero?,
   "queue_size=#{stats[:queue_size]}"
 )
 failures += 1 unless check(
   "consecutive_failures is 0",
-  stats[:consecutive_failures] == 0,
+  stats[:consecutive_failures].zero?,
   "consecutive_failures=#{stats[:consecutive_failures]} total_dropped=#{stats[:total_dropped]}"
 )
 
 # ── Result ─────────────────────────────────────────────────────────────────────
 puts
-if failures == 0
+if failures.zero?
   puts "#{PASS} All checks passed"
   exit 0
 else

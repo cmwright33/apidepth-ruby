@@ -78,15 +78,15 @@ RSpec.describe Apidepth::NetHTTPInstrumentation do
     it "records a :timeout event when Net::ReadTimeout is raised" do
       stub_request(:get, "https://api.stripe.com/v1/charges/ch_abc123")
         .to_raise(Net::ReadTimeout)
-      expect {
+      expect do
         Net::HTTP.get(URI("https://api.stripe.com/v1/charges/ch_abc123"))
-      }.to raise_error(Net::ReadTimeout)
+      end.to raise_error(Net::ReadTimeout)
 
       expect(collector).to have_received(:record).with(
         hash_including(
-          vendor:      "stripe",
-          outcome:     :timeout,
-          status:      nil,
+          vendor: "stripe",
+          outcome: :timeout,
+          status: nil,
           error_class: "Net::ReadTimeout"
         )
       )
@@ -95,9 +95,9 @@ RSpec.describe Apidepth::NetHTTPInstrumentation do
     it "records a :timeout event when Net::OpenTimeout is raised" do
       stub_request(:get, "https://api.stripe.com/v1/charges/ch_abc123")
         .to_raise(Net::OpenTimeout)
-      expect {
+      expect do
         Net::HTTP.get(URI("https://api.stripe.com/v1/charges/ch_abc123"))
-      }.to raise_error(Net::OpenTimeout)
+      end.to raise_error(Net::OpenTimeout)
 
       expect(collector).to have_received(:record).with(
         hash_including(outcome: :timeout, error_class: "Net::OpenTimeout")
@@ -107,15 +107,19 @@ RSpec.describe Apidepth::NetHTTPInstrumentation do
     it "still re-raises the timeout so the customer's error handling fires" do
       stub_request(:get, "https://api.stripe.com/v1/charges/ch_abc123")
         .to_raise(Net::ReadTimeout)
-      expect {
+      expect do
         Net::HTTP.get(URI("https://api.stripe.com/v1/charges/ch_abc123"))
-      }.to raise_error(Net::ReadTimeout)
+      end.to raise_error(Net::ReadTimeout)
     end
 
     it "records a non-negative duration_ms for timeouts" do
       stub_request(:get, "https://api.stripe.com/v1/charges/ch_abc123")
         .to_raise(Net::ReadTimeout)
-      Net::HTTP.get(URI("https://api.stripe.com/v1/charges/ch_abc123")) rescue nil
+      begin
+        Net::HTTP.get(URI("https://api.stripe.com/v1/charges/ch_abc123"))
+      rescue StandardError
+        nil
+      end
       # WebMock raises immediately with no delay, so elapsed rounds to 0ms on
       # fast hardware. Accept >= 0 rather than > 0.
       expect(collector).to have_received(:record).with(
@@ -201,9 +205,9 @@ RSpec.describe Apidepth::NetHTTPInstrumentation do
   describe "SDK never crashes the host application" do
     it "propagates the real HTTP error without adding instrumentation errors" do
       stub_request(:get, "https://api.stripe.com/v1/charges/ch_abc123").to_raise(Net::OpenTimeout)
-      expect {
+      expect do
         Net::HTTP.get(URI("https://api.stripe.com/v1/charges/ch_abc123"))
-      }.to raise_error(Net::OpenTimeout)
+      end.to raise_error(Net::OpenTimeout)
     end
 
     it "does not raise if VendorRegistry raises unexpectedly" do
@@ -247,7 +251,7 @@ RSpec.describe Apidepth::VendorRegistry do
 
     it "applies the generic UUID normalizer when no vendor rule matches" do
       _, path = described_class.identify("api.stripe.com",
-        "/v1/unknown/3f8a2b1c-4d5e-6f7a-8b9c-0d1e2f3a4b5c")
+                                         "/v1/unknown/3f8a2b1c-4d5e-6f7a-8b9c-0d1e2f3a4b5c")
       expect(path).to include("/:uuid")
     end
 
@@ -264,7 +268,7 @@ RSpec.describe Apidepth::VendorRegistry do
 
     it "applies the generic :token normalizer for long lowercase hex strings" do
       _, path = described_class.identify("api.stripe.com",
-        "/v1/unknown/a1b2c3d4e5f6a7b8c9d0e1f2")  # 24 lowercase hex chars
+                                         "/v1/unknown/a1b2c3d4e5f6a7b8c9d0e1f2") # 24 lowercase hex chars
       expect(path).to include("/:token")
     end
   end
@@ -279,7 +283,7 @@ RSpec.describe Apidepth::VendorRegistry do
             result = described_class.identify("api.stripe.com", "/v1/charges/ch_abc")
             errors << "unexpected nil" if result.nil?
           end
-        rescue => e
+        rescue StandardError => e
           errors << e.message
         end
       end
@@ -302,7 +306,7 @@ RSpec.describe Apidepth::VendorRegistry do
         "version" => "test-v1",
         "vendors" => {
           "testvendor" => {
-            "hosts"    => ["api.testvendor.io"],
+            "hosts" => ["api.testvendor.io"],
             "patterns" => [
               { "match" => '/v1/widgets/wgt_\w+', "replace" => "/v1/widgets/:id" }
             ]
@@ -332,7 +336,7 @@ RSpec.describe Apidepth::VendorRegistry do
         "version" => "test",
         "vendors" => {
           "badvendor" => {
-            "hosts"    => ["api.badvendor.io"],
+            "hosts" => ["api.badvendor.io"],
             "patterns" => [{ "match" => match, "replace" => "/safe" }]
           }
         }
@@ -349,7 +353,7 @@ RSpec.describe Apidepth::VendorRegistry do
     end
 
     it "skips malformed patterns without raising" do
-      described_class.replace(registry_with_pattern('[unclosed'))
+      described_class.replace(registry_with_pattern("[unclosed"))
       expect { described_class.identify("api.badvendor.io", "/any/path") }.not_to raise_error
     end
 
@@ -419,7 +423,7 @@ RSpec.describe Apidepth::RegistryLoader do
     before { Apidepth.configuration.registry_cache_path = cache_path }
     after  do
       Apidepth.configuration.registry_cache_path = "/tmp/apidepth_registry.json"
-      File.delete(cache_path) if File.exist?(cache_path)
+      FileUtils.rm_f(cache_path)
     end
 
     it "returns nil when the cache file does not exist" do
@@ -445,21 +449,21 @@ RSpec.describe Apidepth::RegistryLoader do
     end
 
     it "rejects a relative path" do
-      expect {
+      expect do
         described_class.send(:validate_cache_path!, "tmp/apidepth.json")
-      }.to raise_error(ArgumentError, /absolute path/)
+      end.to raise_error(ArgumentError, /absolute path/)
     end
 
     it "rejects a path containing .." do
-      expect {
+      expect do
         described_class.send(:validate_cache_path!, "/tmp/../../etc/passwd")
-      }.to raise_error(ArgumentError, /traversal/)
+      end.to raise_error(ArgumentError, /traversal/)
     end
 
     it "rejects a non-string value" do
-      expect {
+      expect do
         described_class.send(:validate_cache_path!, nil)
-      }.to raise_error(ArgumentError, /absolute path/)
+      end.to raise_error(ArgumentError, /absolute path/)
     end
   end
 end
@@ -477,33 +481,33 @@ RSpec.describe "Apidepth::Collector security" do
     end
 
     it "accepts a valid HTTPS collector URL" do
-      expect {
+      expect do
         collector.send(:validate_collector_url!, url("https://collector.apidepth.io/v1/events"))
-      }.not_to raise_error
+      end.not_to raise_error
     end
 
     it "rejects HTTP URLs" do
-      expect {
+      expect do
         collector.send(:validate_collector_url!, url("http://collector.apidepth.io/v1/events"))
-      }.to raise_error(ArgumentError, /HTTPS/)
+      end.to raise_error(ArgumentError, /HTTPS/)
     end
 
     it "rejects localhost" do
-      expect {
+      expect do
         collector.send(:validate_collector_url!, url("https://localhost/v1/events"))
-      }.to raise_error(ArgumentError, /private/)
+      end.to raise_error(ArgumentError, /private/)
     end
 
     it "rejects 127.x loopback" do
-      expect {
+      expect do
         collector.send(:validate_collector_url!, url("https://127.0.0.1/v1/events"))
-      }.to raise_error(ArgumentError, /private/)
+      end.to raise_error(ArgumentError, /private/)
     end
 
     it "rejects AWS metadata endpoint (169.254.x)" do
-      expect {
+      expect do
         collector.send(:validate_collector_url!, url("https://169.254.169.254/latest/meta-data/"))
-      }.to raise_error(ArgumentError, /private/)
+      end.to raise_error(ArgumentError, /private/)
     end
 
     it "rejects RFC1918 private ranges" do
@@ -513,69 +517,69 @@ RSpec.describe "Apidepth::Collector security" do
         "https://172.16.0.1/admin",
         "https://172.31.255.255/admin"
       ].each do |private_url|
-        expect {
+        expect do
           collector.send(:validate_collector_url!, url(private_url))
-        }.to raise_error(ArgumentError, /private/), "expected #{private_url} to be rejected"
+        end.to raise_error(ArgumentError, /private/), "expected #{private_url} to be rejected"
       end
     end
 
     it "rejects IPv6 loopback" do
-      expect {
+      expect do
         collector.send(:validate_collector_url!, url("https://[::1]/v1/events"))
-      }.to raise_error(ArgumentError, /private/)
+      end.to raise_error(ArgumentError, /private/)
     end
 
     it "rejects IPv6 unique-local (fc00::)" do
-      expect {
+      expect do
         collector.send(:validate_collector_url!, url("https://[fc00::1]/v1/events"))
-      }.to raise_error(ArgumentError, /private/)
+      end.to raise_error(ArgumentError, /private/)
     end
 
     it "rejects IPv6 link-local (fe80::)" do
-      expect {
+      expect do
         collector.send(:validate_collector_url!, url("https://[fe80::1]/v1/events"))
-      }.to raise_error(ArgumentError, /private/)
+      end.to raise_error(ArgumentError, /private/)
     end
 
     it "rejects 0.0.0.0" do
-      expect {
+      expect do
         collector.send(:validate_collector_url!, url("https://0.0.0.0/v1/events"))
-      }.to raise_error(ArgumentError, /private/)
+      end.to raise_error(ArgumentError, /private/)
     end
 
     it "rejects decimal IP representation of 127.0.0.1 (2130706433)" do
       # Known SSRF filter bypass — 2130706433 is 127.0.0.1 as a 32-bit integer.
       # Net::HTTP resolves it at connect time; naive string checks miss it.
-      expect {
+      expect do
         collector.send(:validate_collector_url!, url("https://2130706433/v1/events"))
-      }.to raise_error(ArgumentError, /private/)
+      end.to raise_error(ArgumentError, /private/)
     end
 
     it "rejects decimal IP representation of 169.254.169.254 (2852039166)" do
       # AWS metadata endpoint as decimal integer
-      expect {
+      expect do
         collector.send(:validate_collector_url!, url("https://2852039166/v1/events"))
-      }.to raise_error(ArgumentError, /private/)
+      end.to raise_error(ArgumentError, /private/)
     end
   end
 
   describe "header injection protection (validate_api_key!)" do
     it "accepts a normal api_key" do
-      expect {
+      expect do
         collector.send(:validate_api_key!, "sk_live_abc123")
-      }.not_to raise_error
+      end.not_to raise_error
     end
 
     it "rejects an api_key containing a newline" do
-      expect {
+      expect do
         collector.send(:validate_api_key!, "sk_live_abc\nX-Injected: evil")
-      }.to raise_error(ArgumentError, /line-break/)
+      end.to raise_error(ArgumentError, /line-break/)
     end
 
     it "rejects an api_key containing a carriage return" do
-      expect {
+      expect do
         collector.send(:validate_api_key!, "sk_live_abc\rX-Injected: evil")
-      }.to raise_error(ArgumentError, /line-break/)
+      end.to raise_error(ArgumentError, /line-break/)
     end
 
     it "allows nil api_key without raising (nil guard is elsewhere)" do
@@ -671,8 +675,8 @@ RSpec.describe Apidepth::Collector do
     it "does not include api_key in the batch payload" do
       Apidepth.configuration.api_key = "sk_test_secret"
       stub = stub_request(:post, Apidepth::Collector::DEFAULT_URL)
-               .with { |req| !JSON.parse(req.body).key?("api_key") }
-               .to_return(status: 200)
+             .with { |req| !JSON.parse(req.body).key?("api_key") }
+             .to_return(status: 200)
 
       collector = described_class.new
       collector.record(event)
@@ -686,8 +690,8 @@ RSpec.describe Apidepth::Collector do
     it "sends api_key in the Authorization header" do
       Apidepth.configuration.api_key = "sk_test_secret"
       stub = stub_request(:post, Apidepth::Collector::DEFAULT_URL)
-               .with(headers: { "Authorization" => "Bearer sk_test_secret" })
-               .to_return(status: 200)
+             .with(headers: { "Authorization" => "Bearer sk_test_secret" })
+             .to_return(status: 200)
 
       collector = described_class.new
       collector.record(event)
@@ -727,7 +731,10 @@ RSpec.describe Apidepth::Collector do
     it "increments consecutive_failures on each failed flush" do
       stub_request(:post, Apidepth::Collector::DEFAULT_URL).to_raise(Errno::ECONNREFUSED)
       collector = described_class.new
-      3.times { collector.record(event); collector.send(:safe_flush) }
+      3.times do
+        collector.record(event)
+        collector.send(:safe_flush)
+      end
       expect(collector.consecutive_failures).to eq(3)
     end
 
@@ -738,7 +745,10 @@ RSpec.describe Apidepth::Collector do
         .to_return(status: 200)
 
       collector = described_class.new
-      3.times { collector.record(event); collector.send(:safe_flush) }
+      3.times do
+        collector.record(event)
+        collector.send(:safe_flush)
+      end
       expect(collector.consecutive_failures).to eq(0)
     end
 
@@ -748,7 +758,10 @@ RSpec.describe Apidepth::Collector do
       allow(Apidepth).to receive(:logger).and_return(logger)
 
       collector = described_class.new
-      Apidepth::Collector::FAILURE_THRESHOLD.times { collector.record(event); collector.send(:safe_flush) }
+      Apidepth::Collector::FAILURE_THRESHOLD.times do
+        collector.record(event)
+        collector.send(:safe_flush)
+      end
 
       expect(logger).to have_received(:warn).with(/#{Apidepth::Collector::FAILURE_THRESHOLD} times consecutively/)
     end
@@ -814,7 +827,10 @@ RSpec.describe Apidepth::Collector do
       allow(Apidepth).to receive(:logger).and_return(logger)
 
       collector = described_class.new
-      Apidepth::Collector::FAILURE_THRESHOLD.times { collector.record(event); collector.send(:safe_flush) }
+      Apidepth::Collector::FAILURE_THRESHOLD.times do
+        collector.record(event)
+        collector.send(:safe_flush)
+      end
 
       expect(logged_messages.join).not_to include("sk_secret_key")
       expect(logged_messages.join).not_to include("Bearer")
@@ -830,7 +846,7 @@ RSpec.describe Apidepth::Collector do
       collector.record(event)
 
       expect { collector.flush! }.not_to raise_error
-      expect(collector.consecutive_failures).to eq(1)  # flush! rescues internally but still tracks it
+      expect(collector.consecutive_failures).to eq(1) # flush! rescues internally but still tracks it
     ensure
       Apidepth.configuration.collector_url = nil
     end
@@ -911,15 +927,15 @@ RSpec.describe Apidepth::Event do
   describe ".build" do
     let(:valid_attrs) do
       {
-        vendor:      "stripe",
-        endpoint:    "/v1/charges/:id",
-        method:      "GET",
-        outcome:     :success,
+        vendor: "stripe",
+        endpoint: "/v1/charges/:id",
+        method: "GET",
+        outcome: :success,
         duration_ms: 120,
-        ts:          1_000_000_000_000,
-        status:      200,
-        cold_start:  false,
-        env:         "production"
+        ts: 1_000_000_000_000,
+        status: 200,
+        cold_start: false,
+        env: "production"
       }
     end
 
@@ -930,21 +946,21 @@ RSpec.describe Apidepth::Event do
     end
 
     it "raises ArgumentError when a required field is missing" do
-      expect {
+      expect do
         described_class.build(valid_attrs.reject { |k, _| k == :duration_ms })
-      }.to raise_error(ArgumentError, /duration_ms/)
+      end.to raise_error(ArgumentError, /duration_ms/)
     end
 
     it "raises ArgumentError listing all missing fields" do
-      expect {
+      expect do
         described_class.build(valid_attrs.reject { |k, _| %i[vendor outcome].include?(k) })
-      }.to raise_error(ArgumentError, /vendor.*outcome|outcome.*vendor/)
+      end.to raise_error(ArgumentError, /vendor.*outcome|outcome.*vendor/)
     end
 
     it "permits optional fields like error_class" do
-      expect {
+      expect do
         described_class.build(valid_attrs.merge(error_class: "Net::ReadTimeout"))
-      }.not_to raise_error
+      end.not_to raise_error
     end
   end
 end
@@ -1046,16 +1062,19 @@ RSpec.describe "Apidepth SDK metadata" do
     captured_body = nil
     response      = double("response", code: "200", body: "{}")
     mock_http     = double("Net::HTTP", started?: true)
-    allow(mock_http).to receive(:request) { |req| captured_body = req.body; response }
+    allow(mock_http).to receive(:request) { |req|
+      captured_body = req.body
+      response
+    }
 
     collector = Apidepth::Collector.new
     collector.instance_variable_set(:@http, mock_http)
 
     collector.record(Apidepth::Event.build(
-      vendor: "stripe", endpoint: "/v1/charges/:id", method: "GET",
-      outcome: :success, duration_ms: 100, ts: (Time.now.to_f * 1000).to_i,
-      status: 200, cold_start: false, env: "test"
-    ))
+                       vendor: "stripe", endpoint: "/v1/charges/:id", method: "GET",
+                       outcome: :success, duration_ms: 100, ts: (Time.now.to_f * 1000).to_i,
+                       status: 200, cold_start: false, env: "test"
+                     ))
     collector.flush!
 
     expect(captured_body).not_to be_nil
@@ -1145,7 +1164,7 @@ RSpec.describe "Apidepth::Collector persistent connection" do
       mock_http = mock_connection(collector, code: "503")
 
       # expect finish is called to close the connection cleanly
-      expect(mock_http).to have_received(:finish).exactly(0).times  # not yet
+      expect(mock_http).to have_received(:finish).exactly(0).times # not yet
 
       events = [Apidepth::Event.build(
         vendor: "stripe", endpoint: "/v1/charges/:id", method: "GET",
@@ -1212,7 +1231,10 @@ RSpec.describe "Apidepth::Collector URL memoization" do
       status: 200, cold_start: false, env: "test"
     )
 
-    3.times { collector.record(event); collector.send(:safe_flush) }
+    3.times do
+      collector.record(event)
+      collector.send(:safe_flush)
+    end
 
     # collector_url is memoized — validate_collector_url! fires exactly once
     # regardless of how many flushes occur
@@ -1228,21 +1250,21 @@ end
 
 RSpec.describe "Apidepth::RegistryLoader private class methods" do
   it "fetch_remote is not publicly callable" do
-    expect {
+    expect do
       Apidepth::RegistryLoader.fetch_remote
-    }.to raise_error(NoMethodError, /private/)
+    end.to raise_error(NoMethodError, /private/)
   end
 
   it "load_from_disk is not publicly callable" do
-    expect {
+    expect do
       Apidepth::RegistryLoader.load_from_disk
-    }.to raise_error(NoMethodError, /private/)
+    end.to raise_error(NoMethodError, /private/)
   end
 
   it "validate_cache_path! is not publicly callable" do
-    expect {
+    expect do
       Apidepth::RegistryLoader.validate_cache_path!("/tmp/test.json")
-    }.to raise_error(NoMethodError, /private/)
+    end.to raise_error(NoMethodError, /private/)
   end
 end
 
@@ -1253,7 +1275,7 @@ end
 RSpec.describe "Apidepth::Collector.reset! teardown" do
   it "kills the flush and watchdog threads so they don't outlive the instance" do
     collector = Apidepth::Collector.instance
-    flush_thread   = collector.instance_variable_get(:@flush_thread)
+    flush_thread = collector.instance_variable_get(:@flush_thread)
     watchdog_thread = collector.instance_variable_get(:@watchdog_thread)
 
     expect(flush_thread).to be_alive
@@ -1309,10 +1331,10 @@ RSpec.describe "Apidepth::Collector last_flush_at semantics" do
     expect(collector.last_flush_at).to be_nil
 
     collector.record(Apidepth::Event.build(
-      vendor: "stripe", endpoint: "/v1/charges/:id", method: "GET",
-      outcome: :success, duration_ms: 80, ts: (Time.now.to_f * 1000).to_i,
-      status: 200, cold_start: false, env: "test"
-    ))
+                       vendor: "stripe", endpoint: "/v1/charges/:id", method: "GET",
+                       outcome: :success, duration_ms: 80, ts: (Time.now.to_f * 1000).to_i,
+                       status: 200, cold_start: false, env: "test"
+                     ))
     collector.send(:safe_flush)
 
     expect(collector.last_flush_at).to be_a(Time)
@@ -1406,7 +1428,7 @@ RSpec.describe Apidepth::VendorRegistry do
     it "re-applies multiple extra_vendors after a registry refresh" do
       Apidepth.configuration.extra_vendors = {
         "service-a" => "api.service-a.com",
-        "service-b" => "api.service-b.io",
+        "service-b" => "api.service-b.io"
       }
 
       Apidepth::VendorRegistry.replace(Apidepth::VendorRegistry::BUNDLED_BASELINE)
@@ -1447,7 +1469,7 @@ RSpec.describe "Collector#send_batch extra_vendors" do
   end
 
   after do
-    Apidepth.configuration.api_key    = nil
+    Apidepth.configuration.api_key = nil
     Apidepth.configuration.extra_vendors = {}
   end
 
@@ -1468,7 +1490,10 @@ RSpec.describe "Collector#send_batch extra_vendors" do
 
     # Capture via request spy
     captured_body = nil
-    allow(mock_http).to receive(:request) { |req| captured_body = req.body; response }
+    allow(mock_http).to receive(:request) { |req|
+      captured_body = req.body
+      response
+    }
     collector.instance_variable_set(:@http, mock_http)
     collector.send(:send_batch, [make_event])
 
@@ -1479,7 +1504,10 @@ RSpec.describe "Collector#send_batch extra_vendors" do
   it "omits extra_vendors key from payload when config is empty" do
     Apidepth.configuration.extra_vendors = {}
     captured_body = nil
-    allow(mock_http).to receive(:request) { |req| captured_body = req.body; response }
+    allow(mock_http).to receive(:request) { |req|
+      captured_body = req.body
+      response
+    }
 
     collector = Apidepth::Collector.new
     collector.instance_variable_set(:@http, mock_http)
@@ -1492,7 +1520,10 @@ RSpec.describe "Collector#send_batch extra_vendors" do
   it "omits extra_vendors key from payload when config is nil" do
     Apidepth.configuration.extra_vendors = nil
     captured_body = nil
-    allow(mock_http).to receive(:request) { |req| captured_body = req.body; response }
+    allow(mock_http).to receive(:request) { |req|
+      captured_body = req.body
+      response
+    }
 
     collector = Apidepth::Collector.new
     collector.instance_variable_set(:@http, mock_http)
@@ -1528,7 +1559,10 @@ RSpec.describe "Integration: full instrumentation stack", :integration do
     captured_body = nil
     response      = double("response", code: "200", body: "{}")
     mock_http     = double("Net::HTTP", started?: true)
-    allow(mock_http).to receive(:request) { |req| captured_body = req.body; response }
+    allow(mock_http).to receive(:request) { |req|
+      captured_body = req.body
+      response
+    }
 
     collector = Apidepth::Collector.instance
     collector.instance_variable_set(:@http, mock_http)
@@ -1550,7 +1584,7 @@ RSpec.describe "Integration: full instrumentation stack", :integration do
     expect(event["outcome"]).to eq("success")
     expect(event["status"]).to eq(200)
     expect(event["duration_ms"]).to be_a(Integer).and be >= 0
-    expect(event["ts"]).to be > Time.now.to_i * 100   # milliseconds, not seconds
+    expect(event["ts"]).to be > Time.now.to_i * 100 # milliseconds, not seconds
     expect(event["env"]).to eq("test")
     expect([true, false]).to include(event["cold_start"])
 
