@@ -7,11 +7,12 @@ Gem::Specification.new do |spec|
   spec.version     = Apidepth::VERSION
   spec.authors     = ["Apidepth"]
   spec.email       = ["hello@apidepth.io"]
-  spec.summary     = "Passive outbound API latency monitoring for Rails applications"
+  spec.summary     = "Know if your API slowness is your code or the vendor's"
   spec.description = <<~DESC
-    Apidepth instruments Net::HTTP to capture real production latency to
-    third-party APIs (Stripe, OpenAI, Twilio, etc.) and streams anonymized
-    timing data to the Apidepth collector for trend analysis and alerting.
+    Know if your API slowness is your code or the vendor's. Apidepth instruments
+    Net::HTTP to track real production latency to Stripe, OpenAI, Twilio and others
+    — then benchmarks your p95 against anonymized fleet data so you can see if it's
+    you, or everyone.
   DESC
   spec.homepage    = "https://apidepth.io"
   spec.license     = "MIT"
