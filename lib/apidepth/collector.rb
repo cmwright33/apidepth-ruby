@@ -234,9 +234,16 @@ module Apidepth
       return if events.empty?
 
       key = Apidepth.configuration.api_key
-      # Nil or empty key: Railtie already warned at boot — skip silently rather
-      # than sending a broken "Bearer " header and burning a failure increment.
-      return if key.nil? || key.empty?
+      if key.nil? || key.empty?
+        unless @warned_no_key
+          @warned_no_key = true
+          Apidepth.logger&.warn(
+            "[Apidepth] No API key configured — events are being dropped. " \
+            "Visit www.apidepth.io to create an account and get your key."
+          )
+        end
+        return
+      end
 
       validate_api_key!(key)
 

@@ -8,8 +8,9 @@ module Apidepth
     initializer "apidepth.validate_config", after: :load_config_initializers do
       if Apidepth.configuration.api_key.nil?
         Rails.logger.warn(
-          "[Apidepth] No api_key configured — events will not be delivered. " \
-          "Add `config.api_key = ENV['APIDEPTH_API_KEY']` to config/initializers/apidepth.rb"
+          "[Apidepth] No API key configured — events will not be delivered. " \
+          "Visit www.apidepth.io to create an account and get your key, " \
+          "then add `config.api_key = ENV['APIDEPTH_API_KEY']` to config/initializers/apidepth.rb"
         )
       end
     end

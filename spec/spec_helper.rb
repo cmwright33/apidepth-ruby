@@ -1,5 +1,6 @@
 # spec/spec_helper.rb
 
+require "fileutils"
 require "webmock/rspec"
 require "apidepth"
 
