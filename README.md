@@ -1,16 +1,20 @@
 # apidepth
 
-Passive outbound API latency monitoring for Rails. Captures real production latency to third-party APIs — Stripe, OpenAI, Twilio, and others — without synthetic probes, without payload capture, and without changes to your application code beyond a one-time initializer.
+Most API monitoring tools measure latency from their servers to the vendor. That's not what your users feel. Apidepth instruments `Net::HTTP` directly — every outbound call your app makes to Stripe, OpenAI, or Twilio is timed at the socket level, from your server. Then it benchmarks your numbers against anonymized fleet data, so when Stripe is slow you can tell if it's you or everyone.
+
+No payload capture. No credentials touch our infrastructure. No changes to your application code beyond a one-time initializer.
 
 ---
 
 ## How it works
 
-Most API monitoring tools run scheduled probes from their own servers and measure latency to a vendor endpoint. That tells you how fast the vendor responds to *them*, from *their* location, to a test request. It doesn't tell you what your users are experiencing.
+**Real traffic, not synthetic probes.** Every outbound HTTP call your application makes to a known vendor is timed at the socket level, tagged with outcome and environment metadata, and batched to the Apidepth collector in the background. The latency number in your dashboard is the number your users feel — not a probe running from a data center somewhere else.
 
-Apidepth instruments `Net::HTTP` directly. Every outbound HTTP call your application makes to a known vendor is timed at the socket level, tagged with outcome and environment metadata, and batched to the Apidepth collector in the background. No payloads are captured. No credentials touch our infrastructure. The latency measurement is from your server to the vendor — the number your users feel.
+**Fleet benchmarking.** Because Apidepth aggregates anonymized timing data across all customers, your dashboard shows not just "your Stripe p95 is 420ms" but "the fleet median is 280ms — you may have a regional routing issue." That comparison is only possible with real traffic from real deployments, which is why no synthetic probe tool can offer it.
 
-The second differentiator is benchmarking. Because Apidepth aggregates anonymized timing data across all customers, your dashboard can show not just "your Stripe p95 is 420ms" but "the fleet median is 280ms — you may have a regional routing issue." That comparison is only possible with real traffic from real deployments, which is why no synthetic probe tool can offer it.
+**Proof of Innocence.** When all endpoints to a vendor spike simultaneously, Apidepth surfaces a verdict: *isolated* (the spike is yours alone — likely your code or infrastructure) or *tracking* (the fleet sees the same thing — vendor-side). The attribution card makes it fast to tell ops "it's Stripe, not us."
+
+**Alerts and weekly digest.** Apidepth fires alerts when vendor latency crosses your configured threshold and sends a weekly digest summarizing what changed. Monitoring without alerting is passive; this is working for you.
 
 ---
 
