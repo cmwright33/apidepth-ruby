@@ -660,7 +660,7 @@ RSpec.describe Apidepth::RateLimitHeaders do
       it "prefers x-ratelimit-remaining-requests (OpenAI/Anthropic)" do
         result = described_class.extract(
           mock_response("x-ratelimit-remaining-requests" => "42",
-                        "x-ratelimit-remaining"          => "99"),
+                        "x-ratelimit-remaining" => "99"),
           now_ms
         )
         expect(result[:rl_remaining]).to eq(42)
@@ -687,7 +687,7 @@ RSpec.describe Apidepth::RateLimitHeaders do
       it "prefers x-ratelimit-limit-requests (OpenAI/Anthropic)" do
         result = described_class.extract(
           mock_response("x-ratelimit-limit-requests" => "500",
-                        "x-ratelimit-limit"          => "999"),
+                        "x-ratelimit-limit" => "999"),
           now_ms
         )
         expect(result[:rl_limit]).to eq(500)
@@ -762,7 +762,7 @@ RSpec.describe Apidepth::RateLimitHeaders do
       it "prefers x-ratelimit-reset-requests over x-ratelimit-reset" do
         result = described_class.extract(
           mock_response("x-ratelimit-reset-requests" => "1s",
-                        "x-ratelimit-reset"          => "1716000060"),
+                        "x-ratelimit-reset" => "1716000060"),
           now_ms
         )
         expect(result[:rl_reset_at]).to eq(now_ms + 1_000)
@@ -783,8 +783,8 @@ RSpec.describe Apidepth::RateLimitHeaders do
       result = described_class.extract(
         mock_response(
           "x-ratelimit-remaining-requests" => "100",
-          "x-ratelimit-limit-requests"     => "500",
-          "x-ratelimit-reset-requests"     => "1s"
+          "x-ratelimit-limit-requests" => "500",
+          "x-ratelimit-reset-requests" => "1s"
         ),
         now_ms
       )
@@ -811,8 +811,8 @@ RSpec.describe "RateLimitHeaders integration" do
         status: 200, body: "{}",
         headers: {
           "x-ratelimit-remaining-requests" => "42",
-          "x-ratelimit-limit-requests"     => "500",
-          "x-ratelimit-reset-requests"     => "1s"
+          "x-ratelimit-limit-requests" => "500",
+          "x-ratelimit-reset-requests" => "1s"
         }
       )
 
