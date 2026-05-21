@@ -3,6 +3,14 @@
 # Full test suite. Also serves as the spec document for SDK ports:
 # hand this file to an agent alongside the implementation and say
 # "make these pass in your language."
+#
+# Components a port must implement:
+#   NetHTTPInstrumentation  — HTTP client hook (prepend/middleware/monkey-patch)
+#   VendorRegistry          — host → vendor mapping and path normalisation
+#   RateLimitHeaders        — quota header extraction and reset normalisation
+#   RegistryLoader          — remote fetch → disk cache → bundled baseline
+#   Collector               — background queue, flush thread, watchdog, backpressure
+#   Event                   — schema validation (required fields, frozen payload)
 
 require "spec_helper"
 
@@ -625,8 +633,229 @@ RSpec.describe "Apidepth.sanitize_log" do
 end
 
 # =============================================================================
-# Collector
+# RateLimitHeaders
 # =============================================================================
+
+RSpec.describe Apidepth::RateLimitHeaders do
+  # Build a response double that responds to [] like Net::HTTPResponse.
+  # RateLimitHeaders only calls response[header_name] — nothing else.
+  def mock_response(headers = {})
+    resp = double("Net::HTTPResponse")
+    allow(resp).to receive(:[]) { |k| headers[k.downcase] }
+    resp
+  end
+
+  let(:now_ms) { 1_716_000_000_000 } # fixed epoch ms reference point
+
+  describe ".extract" do
+    it "returns nil when no recognised headers are present" do
+      expect(described_class.extract(mock_response, now_ms)).to be_nil
+    end
+
+    it "returns nil when only unrecognised headers are present" do
+      expect(described_class.extract(mock_response("x-custom-quota" => "100"), now_ms)).to be_nil
+    end
+
+    describe "remaining — priority order" do
+      it "prefers x-ratelimit-remaining-requests (OpenAI/Anthropic)" do
+        result = described_class.extract(
+          mock_response("x-ratelimit-remaining-requests" => "42",
+                        "x-ratelimit-remaining"          => "99"),
+          now_ms
+        )
+        expect(result[:rl_remaining]).to eq(42)
+      end
+
+      it "falls back to x-ratelimit-remaining (GitHub)" do
+        result = described_class.extract(
+          mock_response("x-ratelimit-remaining" => "50"),
+          now_ms
+        )
+        expect(result[:rl_remaining]).to eq(50)
+      end
+
+      it "falls back to ratelimit-remaining (IETF draft)" do
+        result = described_class.extract(
+          mock_response("ratelimit-remaining" => "10"),
+          now_ms
+        )
+        expect(result[:rl_remaining]).to eq(10)
+      end
+    end
+
+    describe "limit — priority order" do
+      it "prefers x-ratelimit-limit-requests (OpenAI/Anthropic)" do
+        result = described_class.extract(
+          mock_response("x-ratelimit-limit-requests" => "500",
+                        "x-ratelimit-limit"          => "999"),
+          now_ms
+        )
+        expect(result[:rl_limit]).to eq(500)
+      end
+
+      it "falls back to x-ratelimit-limit (GitHub)" do
+        result = described_class.extract(
+          mock_response("x-ratelimit-limit" => "5000"),
+          now_ms
+        )
+        expect(result[:rl_limit]).to eq(5000)
+      end
+
+      it "falls back to ratelimit-limit (IETF draft)" do
+        result = described_class.extract(
+          mock_response("ratelimit-limit" => "100"),
+          now_ms
+        )
+        expect(result[:rl_limit]).to eq(100)
+      end
+    end
+
+    describe "reset_at normalisation" do
+      it "treats a large integer as a Unix timestamp, converts to epoch ms" do
+        result = described_class.extract(
+          mock_response("x-ratelimit-reset" => "1716000060"),
+          now_ms
+        )
+        expect(result[:rl_reset_at]).to eq(1_716_000_060_000)
+      end
+
+      it "treats a small integer as seconds-from-now" do
+        result = described_class.extract(
+          mock_response("retry-after" => "30"),
+          now_ms
+        )
+        expect(result[:rl_reset_at]).to eq(now_ms + 30_000)
+      end
+
+      it "parses a plain seconds duration string" do
+        result = described_class.extract(
+          mock_response("x-ratelimit-reset-requests" => "1s"),
+          now_ms
+        )
+        expect(result[:rl_reset_at]).to eq(now_ms + 1_000)
+      end
+
+      it "parses a milliseconds duration string" do
+        result = described_class.extract(
+          mock_response("x-ratelimit-reset-requests" => "20ms"),
+          now_ms
+        )
+        expect(result[:rl_reset_at]).to eq(now_ms + 20)
+      end
+
+      it "parses a compound minutes+seconds duration string" do
+        result = described_class.extract(
+          mock_response("x-ratelimit-reset-requests" => "1m30s"),
+          now_ms
+        )
+        expect(result[:rl_reset_at]).to eq(now_ms + 90_000)
+      end
+
+      it "parses an hours duration string" do
+        result = described_class.extract(
+          mock_response("x-ratelimit-reset-requests" => "2h"),
+          now_ms
+        )
+        expect(result[:rl_reset_at]).to eq(now_ms + 7_200_000)
+      end
+
+      it "prefers x-ratelimit-reset-requests over x-ratelimit-reset" do
+        result = described_class.extract(
+          mock_response("x-ratelimit-reset-requests" => "1s",
+                        "x-ratelimit-reset"          => "1716000060"),
+          now_ms
+        )
+        expect(result[:rl_reset_at]).to eq(now_ms + 1_000)
+      end
+    end
+
+    it "omits absent fields rather than sending nil values" do
+      result = described_class.extract(
+        mock_response("x-ratelimit-remaining" => "5"),
+        now_ms
+      )
+      expect(result).to have_key(:rl_remaining)
+      expect(result).not_to have_key(:rl_limit)
+      expect(result).not_to have_key(:rl_reset_at)
+    end
+
+    it "returns all three fields when all are present" do
+      result = described_class.extract(
+        mock_response(
+          "x-ratelimit-remaining-requests" => "100",
+          "x-ratelimit-limit-requests"     => "500",
+          "x-ratelimit-reset-requests"     => "1s"
+        ),
+        now_ms
+      )
+      expect(result.keys).to contain_exactly(:rl_remaining, :rl_limit, :rl_reset_at)
+    end
+  end
+end
+
+# =============================================================================
+# RateLimitHeaders — instrumentation integration
+# =============================================================================
+
+RSpec.describe "RateLimitHeaders integration" do
+  let(:collector) { instance_double(Apidepth::Collector) }
+
+  before do
+    allow(Apidepth::Collector).to receive(:instance).and_return(collector)
+    allow(collector).to receive(:record)
+  end
+
+  it "attaches rl fields to the event when rate limit headers are present" do
+    stub_request(:get, "https://api.openai.com/v1/chat/completions")
+      .to_return(
+        status: 200, body: "{}",
+        headers: {
+          "x-ratelimit-remaining-requests" => "42",
+          "x-ratelimit-limit-requests"     => "500",
+          "x-ratelimit-reset-requests"     => "1s"
+        }
+      )
+
+    Net::HTTP.get(URI("https://api.openai.com/v1/chat/completions"))
+
+    expect(collector).to have_received(:record).with(
+      hash_including(rl_remaining: 42, rl_limit: 500, rl_reset_at: be_a(Integer))
+    )
+  end
+
+  it "omits rl fields entirely when no rate limit headers are present" do
+    stub_request(:get, "https://api.openai.com/v1/chat/completions")
+      .to_return(status: 200, body: "{}")
+
+    Net::HTTP.get(URI("https://api.openai.com/v1/chat/completions"))
+
+    expect(collector).to have_received(:record) do |event|
+      expect(event).not_to have_key(:rl_remaining)
+      expect(event).not_to have_key(:rl_limit)
+      expect(event).not_to have_key(:rl_reset_at)
+    end
+  end
+
+  it "does not attach rl fields to timeout events (no response headers available)" do
+    stub_request(:get, "https://api.openai.com/v1/chat/completions")
+      .to_raise(Net::ReadTimeout)
+
+    begin
+      Net::HTTP.get(URI("https://api.openai.com/v1/chat/completions"))
+    rescue Net::ReadTimeout
+      nil
+    end
+
+    expect(collector).to have_received(:record) do |event|
+      expect(event).not_to have_key(:rl_remaining)
+      expect(event).not_to have_key(:rl_limit)
+      expect(event).not_to have_key(:rl_reset_at)
+    end
+  end
+end
+
+# =============================================================================
+# Collector
 
 RSpec.describe Apidepth::Collector do
   # Most tests need an api_key so send_batch proceeds past the nil/empty guard.
@@ -873,6 +1102,34 @@ RSpec.describe Apidepth::Collector do
       expect(collector.consecutive_failures).to eq(0)
     ensure
       Apidepth.configuration.api_key = nil
+    end
+  end
+
+  describe "warn-once on missing api_key" do
+    it "logs a warning pointing to apidepth.io on the first flush with no key" do
+      Apidepth.configuration.api_key = nil
+      logger = instance_double(Logger, warn: nil)
+      allow(Apidepth).to receive(:logger).and_return(logger)
+
+      collector = described_class.new
+      collector.record(event)
+      collector.send(:safe_flush)
+
+      expect(logger).to have_received(:warn).with(/apidepth\.io/)
+    end
+
+    it "logs the warning exactly once regardless of how many flushes occur" do
+      Apidepth.configuration.api_key = nil
+      logger = instance_double(Logger, warn: nil)
+      allow(Apidepth).to receive(:logger).and_return(logger)
+
+      collector = described_class.new
+      3.times do
+        collector.record(event)
+        collector.send(:safe_flush)
+      end
+
+      expect(logger).to have_received(:warn).with(/apidepth\.io/).exactly(:once)
     end
   end
 
