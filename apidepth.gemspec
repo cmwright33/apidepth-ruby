@@ -70,9 +70,9 @@ Gem::Specification.new do |spec|
 
   spec.metadata = {
     "homepage_uri"          => spec.homepage,
-    "source_code_uri"       => "https://github.com/apidepth/apidepth-ruby",
-    "changelog_uri"         => "https://github.com/apidepth/apidepth-ruby/blob/main/CHANGELOG.md",
-    "bug_tracker_uri"       => "https://github.com/apidepth/apidepth-ruby/issues",
+    "source_code_uri"       => "https://github.com/cmwright33/apidepth-ruby",
+    "changelog_uri"         => "https://github.com/cmwright33/apidepth-ruby/blob/main/CHANGELOG.md",
+    "bug_tracker_uri"       => "https://github.com/cmwright33/apidepth-ruby/issues",
     "rubygems_mfa_required" => "true"   # require MFA to publish — supply chain protection
   }
 end
