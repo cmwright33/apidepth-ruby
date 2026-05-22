@@ -8,7 +8,9 @@
 #   NetHTTPInstrumentation  — HTTP client hook (prepend/middleware/monkey-patch)
 #   VendorRegistry          — host → vendor mapping and path normalisation
 #   RateLimitHeaders        — quota header extraction and reset normalisation
-#   RegistryLoader          — remote fetch → disk cache → bundled baseline
+#   RegistryLoader          — remote fetch → disk cache → bundled baseline;
+#                             applies customer_vendors from registry response (registry wins);
+#                             warn-once stale-vendor and host-conflict warnings
 #   Collector               — background queue, flush thread, watchdog, backpressure
 #   Event                   — schema validation (required fields, frozen payload)
 

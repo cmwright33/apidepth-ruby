@@ -96,18 +96,25 @@ module Apidepth
 
       local = Apidepth.configuration.extra_vendors || {}
 
+      # Filter to string key-value pairs before passing to load_extra_vendors.
+      # The server response is trusted but load_extra_vendors calls .to_s on
+      # everything — a non-string key like 42 would silently register as "42".
+      clean = {}
       remote.each do |name, remote_host|
         next unless name.is_a?(String) && remote_host.is_a?(String)
 
+        clean[name] = remote_host
         local_host = local[name]
         # Track conflicts before overwriting — emit_warnings reads this later.
-        if local_host && local_host != remote_host
-          @conflict_vendors ||= {}
-          @conflict_vendors[name] = { local: local_host, remote: remote_host }
+        @mutex.synchronize do
+          if local_host && local_host != remote_host
+            @conflict_vendors ||= {}
+            @conflict_vendors[name] = { local: local_host, remote: remote_host }
+          end
         end
       end
 
-      VendorRegistry.load_extra_vendors(remote)
+      VendorRegistry.load_extra_vendors(clean)
     end
 
     # Emit developer-facing warnings from the registry response.
@@ -133,12 +140,19 @@ module Apidepth
     def self.emit_stale_warnings(stale)
       return unless stale.is_a?(Array)
 
-      @warned_stale ||= {}
-      stale.each do |name|
-        next unless name.is_a?(String)
-        next if @warned_stale[name]
+      to_warn = []
+      @mutex.synchronize do
+        @warned_stale ||= {}
+        stale.each do |name|
+          next unless name.is_a?(String)
+          next if @warned_stale[name]
 
-        @warned_stale[name] = true
+          @warned_stale[name] = true
+          to_warn << name
+        end
+      end
+
+      to_warn.each do |name|
         Apidepth.logger&.warn(
           "[Apidepth] No events received from '#{name}' in 7+ days — " \
           "is it still declared in extra_vendors? If intentional, remove " \
@@ -148,12 +162,16 @@ module Apidepth
     end
 
     def self.emit_conflict_warnings
-      conflicts = @conflict_vendors || {}
-      @warned_conflict ||= {}
-      conflicts.each do |name, hosts|
-        next if @warned_conflict[name]
+      conflicts, = @mutex.synchronize do
+        c = @conflict_vendors || {}
+        @conflict_vendors = {}
+        @warned_conflict ||= {}
+        to_warn = c.reject { |name, _| @warned_conflict[name] }
+        to_warn.each_key { |name| @warned_conflict[name] = true }
+        [to_warn]
+      end
 
-        @warned_conflict[name] = true
+      conflicts.each do |name, hosts|
         Apidepth.logger&.warn(
           "[Apidepth] extra_vendors conflict: '#{name}' is configured as " \
           "'#{hosts[:local]}' locally but the registry has '#{hosts[:remote]}' " \
@@ -161,8 +179,6 @@ module Apidepth
           "the entry from your dashboard at www.apidepth.io."
         )
       end
-      # Clear after emitting so fresh conflicts on the next fetch are reported.
-      @conflict_vendors = {}
     end
 
     def self.load_from_disk
@@ -204,5 +220,9 @@ module Apidepth
                          :load_from_disk, :validate_cache_path!,
                          :apply_customer_vendors, :emit_warnings,
                          :emit_stale_warnings, :emit_conflict_warnings
+
+    # Mutex protecting @conflict_vendors, @warned_stale, and @warned_conflict.
+    # Initialized at require time like VendorRegistry's own @mutex.
+    @mutex = Mutex.new
   end
 end
