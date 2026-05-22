@@ -57,6 +57,11 @@ module Apidepth
 
       registry = JSON.parse(res.body)
 
+      # Apply registry-managed customer vendors and emit developer warnings.
+      # Must run before replace() so the vendor list is complete when it lands.
+      apply_customer_vendors(registry)
+      emit_warnings(registry)
+
       # Warm the disk cache so the next cold-start skips the network fetch.
       begin
         validate_cache_path!(Apidepth.configuration.registry_cache_path)
@@ -77,6 +82,87 @@ module Apidepth
         nil
       end
       Thread.current[:apidepth_skip] = false
+    end
+
+    # Apply the collector-managed customer_vendors from the registry response.
+    #
+    # The collector is the source of truth after first declaration. Registry
+    # vendors are loaded on top of locally-declared extra_vendors; registry wins
+    # on any host conflict. Conflict warnings are emitted once per vendor per
+    # process lifetime (see emit_warnings).
+    def self.apply_customer_vendors(registry)
+      remote = registry["customer_vendors"]
+      return unless remote.is_a?(Hash) && !remote.empty?
+
+      local = Apidepth.configuration.extra_vendors || {}
+
+      remote.each do |name, remote_host|
+        next unless name.is_a?(String) && remote_host.is_a?(String)
+
+        local_host = local[name]
+        # Track conflicts before overwriting — emit_warnings reads this later.
+        if local_host && local_host != remote_host
+          @conflict_vendors ||= {}
+          @conflict_vendors[name] = { local: local_host, remote: remote_host }
+        end
+      end
+
+      VendorRegistry.load_extra_vendors(remote)
+    end
+
+    # Emit developer-facing warnings from the registry response.
+    #
+    # Stale vendor warning: vendor exists in registry but no events in 7+ days.
+    # Conflict warning:     local extra_vendors host differs from registry host.
+    #
+    # Both follow the warn-once pattern — an instance flag per vendor prevents
+    # log spam in long-running processes. Warnings fire on registry fetch, not
+    # on every event.
+    def self.emit_warnings(registry)
+      # Stale vendor warnings — sourced from the registry warnings block.
+      # Only present in responses from collector v0.3+; older cached responses skip.
+      warnings = registry["warnings"]
+      emit_stale_warnings(warnings["stale_vendors"]) if warnings.is_a?(Hash)
+
+      # Conflict warnings — collected by apply_customer_vendors, emitted here.
+      # Fires regardless of whether the registry has a warnings block, so that
+      # conflicts detected against a cached/older registry are still surfaced.
+      emit_conflict_warnings
+    end
+
+    def self.emit_stale_warnings(stale)
+      return unless stale.is_a?(Array)
+
+      @warned_stale ||= {}
+      stale.each do |name|
+        next unless name.is_a?(String)
+        next if @warned_stale[name]
+
+        @warned_stale[name] = true
+        Apidepth.logger&.warn(
+          "[Apidepth] No events received from '#{name}' in 7+ days — " \
+          "is it still declared in extra_vendors? If intentional, remove " \
+          "it at www.apidepth.io."
+        )
+      end
+    end
+
+    def self.emit_conflict_warnings
+      conflicts = @conflict_vendors || {}
+      @warned_conflict ||= {}
+      conflicts.each do |name, hosts|
+        next if @warned_conflict[name]
+
+        @warned_conflict[name] = true
+        Apidepth.logger&.warn(
+          "[Apidepth] extra_vendors conflict: '#{name}' is configured as " \
+          "'#{hosts[:local]}' locally but the registry has '#{hosts[:remote]}' " \
+          "— registry takes precedence. Update your initializer or remove " \
+          "the entry from your dashboard at www.apidepth.io."
+        )
+      end
+      # Clear after emitting so fresh conflicts on the next fetch are reported.
+      @conflict_vendors = {}
     end
 
     def self.load_from_disk
@@ -115,6 +201,8 @@ module Apidepth
     # public class methods regardless of placement inside a private block.
     # private_class_method is the correct idiom.
     private_class_method :start_refresh_thread, :fetch_remote,
-                         :load_from_disk, :validate_cache_path!
+                         :load_from_disk, :validate_cache_path!,
+                         :apply_customer_vendors, :emit_warnings,
+                         :emit_stale_warnings, :emit_conflict_warnings
   end
 end

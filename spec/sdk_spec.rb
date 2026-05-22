@@ -474,6 +474,143 @@ RSpec.describe Apidepth::RegistryLoader do
       end.to raise_error(ArgumentError, /absolute path/)
     end
   end
+
+  describe ".apply_customer_vendors" do
+    before do
+      # Reset class-level warn state between tests
+      Apidepth::RegistryLoader.instance_variable_set(:@conflict_vendors, nil)
+      Apidepth::RegistryLoader.instance_variable_set(:@warned_stale, nil)
+      Apidepth::RegistryLoader.instance_variable_set(:@warned_conflict, nil)
+      Apidepth.configure { |c| c.extra_vendors = {} }
+      Apidepth::VendorRegistry.replace(Apidepth::VendorRegistry::BUNDLED_BASELINE)
+    end
+
+    after do
+      Apidepth::VendorRegistry.replace(Apidepth::VendorRegistry::BUNDLED_BASELINE)
+      Apidepth.configure { |c| c.extra_vendors = {} }
+    end
+
+    it "loads remote customer_vendors into the vendor registry" do
+      registry = { "customer_vendors" => { "my-api" => "api.myservice.com" } }
+      described_class.send(:apply_customer_vendors, registry)
+      vendor, = Apidepth::VendorRegistry.identify("api.myservice.com", "/v1/items")
+      expect(vendor).to eq("my-api")
+    end
+
+    it "does nothing when customer_vendors is absent" do
+      expect(Apidepth::VendorRegistry).not_to receive(:load_extra_vendors)
+      described_class.send(:apply_customer_vendors, {})
+    end
+
+    it "does nothing when customer_vendors is not a Hash" do
+      expect(Apidepth::VendorRegistry).not_to receive(:load_extra_vendors)
+      described_class.send(:apply_customer_vendors, { "customer_vendors" => [] })
+    end
+
+    it "does nothing when customer_vendors is an empty hash" do
+      expect(Apidepth::VendorRegistry).not_to receive(:load_extra_vendors)
+      described_class.send(:apply_customer_vendors, { "customer_vendors" => {} })
+    end
+
+    it "records a conflict when local and remote hosts differ for the same vendor name" do
+      Apidepth.configure { |c| c.extra_vendors = { "my-api" => "api.v1.myservice.com" } }
+      registry = { "customer_vendors" => { "my-api" => "api.v2.myservice.com" } }
+      described_class.send(:apply_customer_vendors, registry)
+      conflicts = Apidepth::RegistryLoader.instance_variable_get(:@conflict_vendors)
+      expect(conflicts).to include("my-api")
+      expect(conflicts["my-api"][:local]).to  eq("api.v1.myservice.com")
+      expect(conflicts["my-api"][:remote]).to eq("api.v2.myservice.com")
+    end
+
+    it "does not record a conflict when local and remote hosts match" do
+      Apidepth.configure { |c| c.extra_vendors = { "my-api" => "api.myservice.com" } }
+      registry = { "customer_vendors" => { "my-api" => "api.myservice.com" } }
+      described_class.send(:apply_customer_vendors, registry)
+      conflicts = Apidepth::RegistryLoader.instance_variable_get(:@conflict_vendors) || {}
+      expect(conflicts).not_to include("my-api")
+    end
+
+    it "skips entries where name or host is not a String" do
+      registry = { "customer_vendors" => { "good-api" => "good.host.com", 42 => "bad.host.com" } }
+      described_class.send(:apply_customer_vendors, registry)
+      # Only the string-keyed entry should have been passed to load_extra_vendors
+      vendor, = Apidepth::VendorRegistry.identify("good.host.com", "/v1")
+      expect(vendor).to eq("good-api")
+    end
+  end
+
+  describe ".emit_warnings" do
+    let(:logger) { instance_double(Logger, warn: nil, debug: nil) }
+
+    before do
+      Apidepth::RegistryLoader.instance_variable_set(:@conflict_vendors, nil)
+      Apidepth::RegistryLoader.instance_variable_set(:@warned_stale, nil)
+      Apidepth::RegistryLoader.instance_variable_set(:@warned_conflict, nil)
+      allow(Apidepth).to receive(:logger).and_return(logger)
+    end
+
+    after do
+      Apidepth::RegistryLoader.instance_variable_set(:@conflict_vendors, nil)
+      Apidepth::RegistryLoader.instance_variable_set(:@warned_stale, nil)
+      Apidepth::RegistryLoader.instance_variable_set(:@warned_conflict, nil)
+    end
+
+    it "logs a stale vendor warning for each vendor in stale_vendors" do
+      registry = { "warnings" => { "stale_vendors" => ["fulfillment"], "conflict_vendors" => [] } }
+      described_class.send(:emit_warnings, registry)
+      expect(logger).to have_received(:warn).with(/fulfillment.*7\+ days/)
+    end
+
+    it "does not repeat a stale vendor warning on subsequent fetches (warn-once)" do
+      registry = { "warnings" => { "stale_vendors" => ["fulfillment"], "conflict_vendors" => [] } }
+      2.times { described_class.send(:emit_warnings, registry) }
+      expect(logger).to have_received(:warn).with(/fulfillment/).once
+    end
+
+    it "logs a conflict warning when @conflict_vendors is populated" do
+      Apidepth::RegistryLoader.instance_variable_set(
+        :@conflict_vendors,
+        { "my-api" => { local: "api.v1.myservice.com", remote: "api.v2.myservice.com" } }
+      )
+      described_class.send(:emit_warnings, {})
+      expect(logger).to have_received(:warn).with(/my-api.*registry takes precedence/)
+    end
+
+    it "does not repeat a conflict warning on subsequent fetches (warn-once)" do
+      Apidepth::RegistryLoader.instance_variable_set(
+        :@conflict_vendors,
+        { "my-api" => { local: "api.v1.myservice.com", remote: "api.v2.myservice.com" } }
+      )
+      2.times { described_class.send(:emit_warnings, {}) }
+      expect(logger).to have_received(:warn).with(/my-api/).once
+    end
+
+    it "clears @conflict_vendors after emitting so re-conflicts on the next fetch are reported fresh" do
+      Apidepth::RegistryLoader.instance_variable_set(
+        :@conflict_vendors,
+        { "my-api" => { local: "api.v1.myservice.com", remote: "api.v2.myservice.com" } }
+      )
+      described_class.send(:emit_warnings, {})
+      conflicts = Apidepth::RegistryLoader.instance_variable_get(:@conflict_vendors)
+      expect(conflicts).to be_empty
+    end
+
+    it "does nothing when warnings key is absent" do
+      expect { described_class.send(:emit_warnings, {}) }.not_to raise_error
+      expect(logger).not_to have_received(:warn)
+    end
+
+    it "does nothing when warnings value is not a Hash" do
+      expect { described_class.send(:emit_warnings, { "warnings" => nil }) }.not_to raise_error
+    end
+
+    it "skips non-string entries in stale_vendors" do
+      registry = { "warnings" => { "stale_vendors" => [42, nil, "real-vendor"], "conflict_vendors" => [] } }
+      described_class.send(:emit_warnings, registry)
+      expect(logger).to have_received(:warn).with(/real-vendor/).once
+      expect(logger).to have_received(:warn).exactly(1).times
+    end
+  end
 end
 
 # =============================================================================
