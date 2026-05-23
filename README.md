@@ -1,5 +1,9 @@
 # apidepth
 
+[![Gem Version](https://img.shields.io/gem/v/apidepth)](https://rubygems.org/gems/apidepth)
+[![Ruby](https://img.shields.io/badge/ruby-%3E%3D%202.7-ruby)](https://rubygems.org/gems/apidepth)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Most API monitoring tools measure latency from their servers to the vendor. That's not what your users feel. Apidepth instruments `Net::HTTP` directly — every outbound call your app makes to Stripe, OpenAI, or Twilio is timed at the socket level, from your server. Then it benchmarks your numbers against anonymized fleet data, so when Stripe is slow you can tell if it's you or everyone.
 
 No payload capture. No credentials touch our infrastructure. No changes to your application code beyond a one-time initializer.
