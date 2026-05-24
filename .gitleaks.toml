@@ -1,0 +1,5 @@
+title = "Apidepth Ruby SDK Gitleaks Config"
+
+[allowlist]
+  description = "Test fixture values — not real credentials"
+  paths = ['''(^|/)spec/''']
