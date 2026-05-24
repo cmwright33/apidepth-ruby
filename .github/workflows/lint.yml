@@ -8,6 +8,6 @@ on:
 
 jobs:
   lint:
-    uses: cmwright33/apidepth-tooling/.github/workflows/lint-ruby.yml@main
+    uses: apidepth-io/apidepth-tooling/.github/workflows/lint-ruby.yml@main
     with:
       ruby-version: "3.2"

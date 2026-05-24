@@ -21,7 +21,7 @@ jobs:
       - name: Checkout collector (SSRF fixture)
         uses: actions/checkout@v4
         with:
-          repository: cmwright33/apidepth-collector
+          repository: apidepth-io/apidepth-collector
           token: ${{ secrets.GH_PAT }}
           path: apidepth-collector
           sparse-checkout: tests/fixtures
