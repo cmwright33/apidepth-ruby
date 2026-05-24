@@ -33,3 +33,6 @@ Gemfile.lock
 # Gem signing keys — never commit private keys
 *.pem
 gem-private_key.pem
+
+# Claude Code
+.claude/
