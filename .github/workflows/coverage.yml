@@ -8,4 +8,40 @@ on:
 
 jobs:
   coverage:
-    uses: apidepth-io/apidepth-tooling/.github/workflows/coverage-ruby.yml@main
+    name: RSpec coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout collector (SSRF fixture)
+        uses: actions/checkout@v4
+        with:
+          repository: apidepth-io/apidepth-collector
+          token: ${{ secrets.GH_PAT }}
+          path: apidepth-collector
+          sparse-checkout: tests/fixtures
+          sparse-checkout-cone-mode: false
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+
+      - name: Run tests with coverage
+        run: bundle exec rspec
+        env:
+          COVERAGE: "true"
+
+      - name: Enforce coverage threshold
+        run: |
+          ruby - <<'RUBY'
+          require 'json'
+          report = 'coverage/.last_run.json'
+          abort "No coverage report at #{report}. Add simplecov to spec_helper.rb." unless File.exist?(report)
+          coverage = JSON.parse(File.read(report)).dig('result', 'line').to_f
+          min = 80.0
+          puts "Line coverage: #{coverage.round(2)}%"
+          abort "Coverage #{coverage.round(2)}% is below minimum #{min}%" if coverage < min
+          puts "Coverage OK (>= #{min}%)"
+          RUBY
