@@ -34,3 +34,8 @@ jobs:
 
       - name: Tests
         run: bundle exec rspec
+
+  coverage:
+    name: Coverage
+    uses: apidepth-io/apidepth-tooling/.github/workflows/coverage-ruby.yml@main
+    secrets: inherit
