@@ -480,10 +480,7 @@ RSpec.describe Apidepth::RegistryLoader do
 
   describe ".apply_customer_vendors" do
     before do
-      # Reset class-level warn state between tests
-      Apidepth::RegistryLoader.instance_variable_set(:@conflict_vendors, nil)
-      Apidepth::RegistryLoader.instance_variable_set(:@warned_stale, nil)
-      Apidepth::RegistryLoader.instance_variable_set(:@warned_conflict, nil)
+      Apidepth::RegistryLoader.reset_state!
       Apidepth.configure { |c| c.extra_vendors = {} }
       Apidepth::VendorRegistry.replace(Apidepth::VendorRegistry::BUNDLED_BASELINE)
     end
@@ -546,16 +543,12 @@ RSpec.describe Apidepth::RegistryLoader do
     let(:logger) { instance_double(Logger, warn: nil, debug: nil) }
 
     before do
-      Apidepth::RegistryLoader.instance_variable_set(:@conflict_vendors, nil)
-      Apidepth::RegistryLoader.instance_variable_set(:@warned_stale, nil)
-      Apidepth::RegistryLoader.instance_variable_set(:@warned_conflict, nil)
+      Apidepth::RegistryLoader.reset_state!
       allow(Apidepth).to receive(:logger).and_return(logger)
     end
 
     after do
-      Apidepth::RegistryLoader.instance_variable_set(:@conflict_vendors, nil)
-      Apidepth::RegistryLoader.instance_variable_set(:@warned_stale, nil)
-      Apidepth::RegistryLoader.instance_variable_set(:@warned_conflict, nil)
+      Apidepth::RegistryLoader.reset_state!
     end
 
     it "logs a stale vendor warning for each vendor in stale_vendors" do

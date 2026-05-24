@@ -213,6 +213,17 @@ module Apidepth
       raise ArgumentError, "registry_cache_path must not contain '..' traversal segments (got #{path.inspect})"
     end
 
+    # Reset mutable class-level warn state under @mutex.
+    # Called by tests instead of raw instance_variable_set so that state
+    # changes go through the same lock used in production code paths.
+    def self.reset_state!
+      @mutex.synchronize do
+        @conflict_vendors = {}
+        @warned_stale     = {}
+        @warned_conflict  = {}
+      end
+    end
+
     # Ruby's `private` keyword does not apply to `def self.method` — those remain
     # public class methods regardless of placement inside a private block.
     # private_class_method is the correct idiom.

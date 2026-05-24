@@ -240,12 +240,14 @@ module Apidepth
 
       key = Apidepth.configuration.api_key
       if key.nil? || key.empty?
-        unless @warned_no_key
-          @warned_no_key = true
-          Apidepth.logger&.warn(
-            "[Apidepth] No API key configured — events are being dropped. " \
-            "Visit www.apidepth.io to create an account and get your key."
-          )
+        @stats_mutex.synchronize do
+          unless @warned_no_key
+            @warned_no_key = true
+            Apidepth.logger&.warn(
+              "[Apidepth] No API key configured — events are being dropped. " \
+              "Visit www.apidepth.io to create an account and get your key."
+            )
+          end
         end
         return
       end
