@@ -37,5 +37,20 @@ jobs:
           bundler-cache: true
       - name: Build gem
         run: gem build apidepth.gemspec
+      - name: Get RubyGems OIDC token
+        id: rubygems-token
+        run: |
+          OIDC_TOKEN=$(curl --silent \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=rubygems.org" \
+            --header "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            | jq -r '.value')
+          API_KEY=$(curl --silent https://rubygems.org/api/v1/trusted_publishing/tokens \
+            --header 'Content-Type: application/json' \
+            --data "{\"oidc_token\": \"${OIDC_TOKEN}\"}" \
+            | jq -r '.rubygems_api_key')
+          echo "::add-mask::${API_KEY}"
+          echo "api_key=${API_KEY}" >> "${GITHUB_OUTPUT}"
       - name: Push to RubyGems
-        uses: rubygems/release-gem@v1
+        run: gem push apidepth-*.gem
+        env:
+          GEM_HOST_API_KEY: ${{ steps.rubygems-token.outputs.api_key }}
