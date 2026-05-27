@@ -37,26 +37,5 @@ jobs:
           bundler-cache: true
       - name: Build gem
         run: gem build apidepth.gemspec
-      - name: Get RubyGems OIDC token
-        id: rubygems-token
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const oidcToken = await core.getIDToken('rubygems.org');
-            const response = await fetch('https://rubygems.org/api/v1/trusted_publishing/tokens', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ oidc_token: oidcToken }),
-            });
-            if (!response.ok) {
-              const body = await response.text();
-              core.setFailed(`RubyGems token exchange failed (${response.status}): ${body}`);
-              return;
-            }
-            const { rubygems_api_key } = await response.json();
-            core.setSecret(rubygems_api_key);
-            core.setOutput('api_key', rubygems_api_key);
       - name: Push to RubyGems
-        run: gem push apidepth-*.gem
-        env:
-          GEM_HOST_API_KEY: ${{ steps.rubygems-token.outputs.api_key }}
+        uses: rubygems/release-gem@v1
