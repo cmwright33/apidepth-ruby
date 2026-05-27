@@ -7,6 +7,28 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.3.0](https://github.com/apidepth-io/apidepth-ruby/compare/apidepth-v0.2.3...apidepth/v0.3.0) (2026-05-27)
+
+
+### Features
+
+* apply registry customer_vendors and emit stale/conflict warnings ([f2882dd](https://github.com/apidepth-io/apidepth-ruby/commit/f2882dd4fc122b811c8168cc73f7647efaa9e8d0))
+
+
+### Bug Fixes
+
+* add rubocop dev dependency and resolve all lint violations ([53cf328](https://github.com/apidepth-io/apidepth-ruby/commit/53cf328c63c88ebbf88a27c75d52eb38f8b3e712))
+* extend PRIVATE_HOST_PATTERN to block fd00::/8 addresses and add shared fixture tests ([c4b1103](https://github.com/apidepth-io/apidepth-ruby/commit/c4b110312348e0d3dad98a48b4a7b601712e5b8d))
+* extra_vendors wiped on registry refresh, nil-safety in send_batch ([cecba8a](https://github.com/apidepth-io/apidepth-ruby/commit/cecba8ad93e45c5ca0d779b93edee93226c9702f))
+* require fileutils in spec_helper for Ruby 3.1/3.2 compatibility ([13daea6](https://github.com/apidepth-io/apidepth-ruby/commit/13daea6e0a093a6af6234f9d68c09b6572a90ae8))
+* resolve all rubocop violations across specs, scripts, and examples ([5577996](https://github.com/apidepth-io/apidepth-ruby/commit/55779964b3eaeafbc07ba921d2fc9260dbf1807b))
+* resolve all rubocop violations across specs, scripts, and examples ([4e439d0](https://github.com/apidepth-io/apidepth-ruby/commit/4e439d0d24186f3d8f03b002a80251d1b9eb2d0f))
+* resolve RuboCop offenses in collector and registry_loader ([3adadb4](https://github.com/apidepth-io/apidepth-ruby/commit/3adadb4347927110393e382b8880ec4c7f19d1c5))
+* SDK hardening — non-blocking init, ReDoS protection, safer header parsing ([459a159](https://github.com/apidepth-io/apidepth-ruby/commit/459a159063460321324ef223503815d013a18cea))
+* thread safety, filter remote dict, mutex for warn-once state ([2161fd0](https://github.com/apidepth-io/apidepth-ruby/commit/2161fd03bca0f6a5773fbfff25a3b550361630b4))
+* thread-safety gaps in Collector and RegistryLoader (RUBY-001, RUBY-003) ([7511a76](https://github.com/apidepth-io/apidepth-ruby/commit/7511a76aa3ac706c770e372596302a53501b1b40))
+* use between? for integer range check (RuboCop Style/ComparableBetween) ([8139154](https://github.com/apidepth-io/apidepth-ruby/commit/8139154d2dc9a1c00a3e204e0ccfa26b029b3ef8))
+
 ## [Unreleased]
 
 ---
