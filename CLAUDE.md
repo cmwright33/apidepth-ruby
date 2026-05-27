@@ -45,9 +45,9 @@ Tests run via `.github/workflows/ci.yml` across Ruby 3.1, 3.2, 3.3. The test sui
 
 ## GitHub Actions secrets
 
-| Secret | Used for |
+| Secret / config | Used for |
 |---|---|
-| `RUBYGEMS_API_KEY` | Pushing the gem to RubyGems |
 | `GH_PAT` | Checking out test fixtures from apidepth-collector |
+| RubyGems Trusted Publisher | Pushes to RubyGems — configured on RubyGems' side (no GitHub secret needed) |
 
 See `CONTRIBUTING.md` for the full contributor guide.
