@@ -9,23 +9,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-### Added
-
-- **Extra vendors bidirectional sync** — `RegistryLoader` now reads `customer_vendors`
-  from the `/v1/registry` response and applies them via `VendorRegistry.load_extra_vendors`
-  after every successful remote fetch. The registry-sourced set takes precedence over
-  locally-declared `extra_vendors`; local config continues to serve as the active set
-  until the first fetch completes.
-
-- **Conflict warnings** (`apply_customer_vendors`) — if a vendor name appears in both the
-  local config and the registry with different hosts, a one-time warn-level log is emitted
-  per vendor per process lifetime, identifying the local and remote hosts and noting that
-  the registry takes precedence.
-
-- **Stale vendor warnings** (`emit_stale_warnings`) — if the registry response includes
-  `warnings.stale_vendors`, a one-time warn-level log is emitted per vendor per process
-  lifetime when no events have been received for that vendor in 7+ days.
-
 ---
 
 ## [0.2.1] — 2026-05-21
@@ -146,5 +129,7 @@ Initial release.
 
 ---
 
-[Unreleased]: https://github.com/apidepth/apidepth-ruby/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/apidepth/apidepth-ruby/releases/tag/v0.1.0
+[Unreleased]: https://github.com/cmwright33/apidepth-ruby/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/cmwright33/apidepth-ruby/compare/v0.2.1...v0.2.3
+[0.2.1]: https://github.com/cmwright33/apidepth-ruby/compare/v0.1.0...v0.2.1
+[0.1.0]: https://github.com/cmwright33/apidepth-ruby/releases/tag/v0.1.0
