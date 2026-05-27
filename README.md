@@ -40,7 +40,7 @@ bundle install
 
 ---
 
-## Quick start
+## Getting started
 
 Create `config/initializers/apidepth.rb`:
 
@@ -100,7 +100,8 @@ Apidepth.configure do |config|
   # Path for the local vendor registry cache. Must be an absolute path.
   # The registry is fetched from Apidepth's servers and cached here so
   # cold starts don't block on a network fetch.
-  # Default: "/tmp/apidepth_registry.json"
+  # Rails default: Rails.root.join("tmp/apidepth_registry.json") (set by the Railtie)
+  # Non-Rails default: "/tmp/apidepth_registry.json"
   config.registry_cache_path = "/tmp/apidepth_registry.json"
 
   # Custom vendors your app calls that aren't in the global registry.
@@ -133,6 +134,9 @@ Every event contains:
 | `cold_start` | `true` if this request paid for SSL handshake; excluded from p95 calculations |
 | `env` | Environment tag from `config.environment` or `Rails.env` |
 | `ts` | Unix timestamp in milliseconds |
+| `rl_remaining` | Remaining quota, e.g. `4999` — present when vendor rate limit headers are found |
+| `rl_limit` | Total quota, e.g. `5000` — present when vendor rate limit headers are found |
+| `rl_reset_at` | Quota reset time in epoch milliseconds — present when vendor rate limit headers are found |
 
 ### What is never captured
 
