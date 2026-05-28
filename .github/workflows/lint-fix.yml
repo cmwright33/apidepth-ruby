@@ -1,0 +1,17 @@
+name: Lint Fix
+
+# Runs rubocop -A on every PR and commits corrections back to the PR branch.
+# The existing lint.yml check workflow re-runs after the commit and will fail
+# if any offenses remain that cannot be auto-corrected.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-fix:
+    uses: apidepth-io/apidepth-tooling/.github/workflows/lint-fix-ruby.yml@main
+    with:
+      ruby-version: "3.2"
+    permissions:
+      contents: write
