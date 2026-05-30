@@ -7,6 +7,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.4.0](https://github.com/apidepth-io/apidepth-ruby/compare/apidepth/v0.3.0...apidepth/v0.4.0) (2026-05-30)
+
+
+### Features
+
+* onboarding cluster — setup/test CLI, smart ignored host defaults, framework detection ([#24](https://github.com/apidepth-io/apidepth-ruby/issues/24)) ([a191638](https://github.com/apidepth-io/apidepth-ruby/commit/a191638e48a3459484ceb504807f5d06b157bbdb))
+
 ## [0.3.0](https://github.com/apidepth-io/apidepth-ruby/compare/apidepth-v0.2.3...apidepth/v0.3.0) (2026-05-27)
 
 
