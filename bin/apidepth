@@ -1,0 +1,31 @@
+#!/usr/bin/env ruby
+# bin/apidepth — CLI entry point for the Apidepth Ruby SDK.
+#
+# Subcommands:
+#   setup   Configure the SDK for your project (writes initializer)
+#   test    Send a synthetic test event and confirm the pipeline works
+
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+
+subcommand = ARGV.shift
+
+case subcommand
+when "setup"
+  require "apidepth/cli/setup"
+  Apidepth::CLI::Setup.run(ARGV)
+when "test"
+  require "apidepth/cli/test_cmd"
+  Apidepth::CLI::TestCmd.run(ARGV)
+when nil, "--help", "-h"
+  puts "Usage: bundle exec apidepth <subcommand> [options]"
+  puts ""
+  puts "Subcommands:"
+  puts "  setup   Configure the SDK and write your initializer"
+  puts "  test    Send a test event to confirm the pipeline works"
+  puts ""
+  puts "Run `bundle exec apidepth <subcommand> --help` for subcommand options."
+else
+  warn "Unknown subcommand: #{subcommand.inspect}"
+  warn "Run `bundle exec apidepth --help` for usage."
+  exit 1
+end

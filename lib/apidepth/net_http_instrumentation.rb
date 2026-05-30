@@ -10,7 +10,7 @@ module Apidepth
       # 4. Sample rate: probabilistically skip events
       return super if Thread.current[:apidepth_skip]
       return super unless Apidepth.configuration.enabled
-      return super if Apidepth.configuration.ignored_hosts.include?(address)
+      return super if Apidepth.configuration.ignored_host?(address)
       return super unless sampled?
 
       # Snapshot connection state BEFORE calling super.

@@ -16,6 +16,7 @@
 
 require "json"
 require "spec_helper"
+require "apidepth/cli/framework_detector"
 
 # =============================================================================
 # NetHTTPInstrumentation
@@ -1333,11 +1334,100 @@ RSpec.describe Apidepth::Configuration do
     expect(config.flush_interval).to eq(20)
     expect(config.registry_refresh_interval).to eq(6 * 60 * 60)
     expect(config.registry_cache_path).to eq("/tmp/apidepth_registry.json")
-    expect(config.ignored_hosts).to be_empty
     expect(config.on_flush_error).to be_nil
     expect(config.collector_url).to be_nil
     expect(config.environment).to be_nil
     expect(config.sample_rate).to eq(1.0)
+  end
+
+  it "includes hard ignored hosts by default" do
+    config = described_class.new
+    %w[localhost 127.0.0.1 0.0.0.0 ::1].each do |host|
+      expect(config.ignored_host?(host)).to be true
+    end
+  end
+
+  it "merges user-supplied hosts with hard defaults" do
+    config = described_class.new
+    config.ignored_hosts = ["api.internal.example.com"]
+    expect(config.ignored_host?("api.internal.example.com")).to be true
+    expect(config.ignored_host?("localhost")).to be true
+  end
+
+  it "supports glob wildcard patterns in ignored_hosts" do
+    config = described_class.new
+    config.ignored_hosts = ["*.internal", "*.svc.cluster.local"]
+    expect(config.ignored_host?("api.internal")).to be true
+    expect(config.ignored_host?("db.internal")).to be true
+    expect(config.ignored_host?("api.svc.cluster.local")).to be true
+    expect(config.ignored_host?("api.stripe.com")).to be false
+  end
+
+  it "auto-ignores the collector hostname when collector_url is set" do
+    config = described_class.new
+    config.collector_url = "https://collector.apidepth.io/v1/events"
+    expect(config.ignored_host?("collector.apidepth.io")).to be true
+  end
+
+  it "updates ignored hosts when collector_url changes" do
+    config = described_class.new
+    config.collector_url = "https://collector.apidepth.io/v1/events"
+    config.collector_url = "https://custom.collector.example.com/v1/events"
+    expect(config.ignored_host?("custom.collector.example.com")).to be true
+  end
+
+  it "does not raise on malformed collector_url" do
+    config = described_class.new
+    expect { config.collector_url = "not a url" }.not_to raise_error
+  end
+end
+
+# =============================================================================
+# FrameworkDetector
+# =============================================================================
+
+RSpec.describe Apidepth::CLI::FrameworkDetector do
+  require "tmpdir"
+  let(:tmpdir) { Dir.mktmpdir }
+  after { FileUtils.remove_entry(tmpdir) }
+
+  it "detects Rails when config/application.rb exists" do
+    FileUtils.mkdir_p(File.join(tmpdir, "config"))
+    FileUtils.touch(File.join(tmpdir, "config/application.rb"))
+    result = described_class.detect(dir: tmpdir, api_key: "apid_test")
+    expect(result.name).to eq(:rails)
+    expect(result.initializer_path).to eq("config/initializers/apidepth.rb")
+    expect(result.initializer_snippet).to include("Apidepth.configure")
+  end
+
+  it "detects Sinatra when config.ru exists without application.rb" do
+    FileUtils.touch(File.join(tmpdir, "config.ru"))
+    result = described_class.detect(dir: tmpdir)
+    expect(result.name).to eq(:sinatra)
+    expect(result.initializer_path).to be_nil
+  end
+
+  it "falls back to generic when no known files present" do
+    result = described_class.detect(dir: tmpdir)
+    expect(result.name).to eq(:generic)
+  end
+
+  it "injects the api_key into the snippet" do
+    result = described_class.detect(dir: tmpdir, api_key: "apid_live_abc123")
+    expect(result.initializer_snippet).to include("apid_live_abc123")
+  end
+
+  it "injects ignored_hosts into the snippet" do
+    result = described_class.detect(dir: tmpdir, ignored_hosts: ["*.internal"])
+    expect(result.initializer_snippet).to include("*.internal")
+  end
+
+  it "prefers Rails over Sinatra when both files exist" do
+    FileUtils.mkdir_p(File.join(tmpdir, "config"))
+    FileUtils.touch(File.join(tmpdir, "config/application.rb"))
+    FileUtils.touch(File.join(tmpdir, "config.ru"))
+    result = described_class.detect(dir: tmpdir)
+    expect(result.name).to eq(:rails)
   end
 end
 

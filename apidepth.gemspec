@@ -23,10 +23,12 @@ Gem::Specification.new do |spec|
 
   spec.files = Dir[
     "lib/**/*.rb",
+    "bin/apidepth",
     "README.md",
     "LICENSE"
   ]
 
+  spec.executables   = ["apidepth"]
   spec.require_paths = ["lib"]
 
   # -------------------------------------------------------------------------
