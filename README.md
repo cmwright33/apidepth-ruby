@@ -56,6 +56,46 @@ Get your API key at [apidepth.io](https://apidepth.io).
 
 ---
 
+## CLI
+
+The gem ships two subcommands for setup and connectivity verification.
+
+### `bundle exec apidepth setup`
+
+Interactive wizard that detects your framework (Rails, Sinatra, or generic), generates the correct initializer snippet, and optionally writes it to disk.
+
+```bash
+bundle exec apidepth setup
+```
+
+For CI/CD pipelines, skip all prompts:
+
+```bash
+bundle exec apidepth setup --api-key $APIDEPTH_API_KEY --no-prompt
+```
+
+| Flag | Description |
+|---|---|
+| `--api-key <key>` | Inject your API key into the generated snippet. |
+| `--no-prompt` | Non-interactive mode — print snippet to stdout and exit. |
+| `--framework <name>` | Override auto-detection (`rails`, `sinatra`, `generic`). |
+| `--ignored-hosts <patterns>` | Comma-separated host patterns to add to `ignored_hosts` (glob wildcards supported). |
+| `--collector-url <url>` | Override the collector URL in the generated snippet. |
+
+### `bundle exec apidepth test`
+
+Sends a synthetic test event to the collector and confirms the pipeline is working end-to-end. Reads `APIDEPTH_API_KEY` (and optionally `APIDEPTH_COLLECTOR_URL`) from the environment. Prints the round-trip time on success, or a per-failure-mode error message with next steps on failure.
+
+```bash
+bundle exec apidepth test
+# ✓ received in 142ms
+# Visit your dashboard: https://apidepth.io/dashboard
+```
+
+Exits with code 1 on any error (bad key, unreachable, SSL failure, timeout).
+
+---
+
 ## Configuration
 
 All options with their defaults:
